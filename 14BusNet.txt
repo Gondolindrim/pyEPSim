@@ -1,0 +1,135 @@
+08/19/93 UW ARCHIVE           100.0  1962 W IEEE 14 Bus Test Case
+-------------------------------------------------
+Bus data columns:
+01 Bus number (I) *
+02 Name (A)*
+03 Load flow area number (I) Don't use zero!
+04 Loss zone number (I)
+05 Type (I) *
+	0 - Unregulated (load, PQ)
+	1 - Hold MVAR generation within voltage limits, (PQ)
+	2 - Hold voltage within VAR limits (gen, PV)
+	3 - Hold voltage and angle (swing, V-Theta) (must always have one)
+06 Final voltage, p.u. (F) *
+07 Final angle, degrees (F) *
+08 Load MW (F) *
+09 Load MVAR (F) *
+10 Generation MW (F) *
+11 Generation MVAR (F) *
+12 Base KV (F)
+13 Desired volts (pu) (F) (This is desired remote voltage if
+14 this bus is controlling another bus.
+15 Maximum MVAR or voltage limit (F)
+16 Minimum MVAR or voltage limit (F)
+17 Shunt conductance G (per unit) (F) *
+18 Shunt susceptance B (per unit) (F) *
+19 Remote controlled bus number
+
+BUS DATA FOLLOWS 014 ITEMS
+-------------------------------------------------
+1	'Bus 1'		1	1	3	1.060	0.0		0.0 	0.0 	232.4	-16.9	0.0	1.060	0.0	0.0	0.0	0.0	0
+2	'Bus 2'		1	1	2	1.045	-4.98		21.7	12.7	40.0	42.4 	0.0	1.045	50.0	-40.0	0.0	0.0	0
+3	'Bus 3'		1	1	2	1.010	-12.72		94.2	19.0	0.0 	23.4 	0.0	1.010	40.0	0.0	0.0	0.0	0
+4	'Bus 4'		1	1	0	1.019	-10.33		47.8	-3.9	0.0 	0.0  	0.0	0.0	0.0 	0.0	0.0	0.0	0
+5	'Bus 5'		1	1	0	1.020	-8.78		7.6 	1.6 	0.0 	0.0  	0.0	0.0	0.0 	0.0	0.0	0.0	0
+6	'Bus 6'		1	1	2	1.070	-14.22		11.2	7.5 	0.0 	12.2 	0.0	1.070	24.0	-6.0	0.0	0.0	0
+7	'Bus 7'		1	1	0	1.062	-13.37		0.0 	0.0 	0.0 	0.0	0.0	0.0	0.0 	0.0	0.0	0.0	0
+8	'Bus 8'		1	1	2	1.090	-13.36		0.0 	0.0 	0.0 	17.4	0.0	1.090	24.0	-6.0	0.0	0.0	0
+9	'Bus 9'		1	1	0	1.056	-14.94		29.5	16.6	0.0 	0.0  	0.0	0.0	0.0 	0.0	0.0	0.19	0
+10	'Bus 10'	1	1	0	1.051	-15.10		9.0 	5.8 	0.0 	0.0  	0.0	0.0	0.0 	0.0	0.0	0.0	0
+11	'Bus 11'	1	1	0	1.057	-14.79		3.5 	1.8 	0.0 	0.0  	0.0	0.0	0.0 	0.0	0.0	0.0	0
+12	'Bus 12'	1	1	0	1.055	-15.07		6.1 	1.6 	0.0 	0.0  	0.0	0.0	0.0 	0.0	0.0	0.0	0
+13	'Bus 13'	1	1	0	1.050	-15.16		13.5	5.8 	0.0 	0.0  	0.0	0.0	0.0 	0.0	0.0	0.0	0
+14	'Bus 14'	1	1	0	1.036	-16.04		14.9	5.0 	0.0 	0.0  	0.0	0.0	0.0 	0.0	0.0	0.0	0
+-999 
+-------------------------------------------------
+
+01 Tap bus number (I). For transformers or phase shifters, the side of the model the non-unity tap is on 
+02 Z bus number (I).  For transformers and phase shifters, the side of the model the device impedance is on.
+03 Load flow area (I)
+04 Loss zone (I)
+05 Circuit (I) * (Use 1 for single lines)
+06 Type (I) *
+	0 - Transmission line
+	1 - Fixed tap
+	2 - Variable tap for voltage control (TCUL, LTC)
+	3 - Variable tap (turns ratio) for MVAR control
+	4 - Variable phase angle for MW control (phase shifter)
+07 Branch resistance R, per unit (F) *
+08 Branch reactance X, per unit (F) * No zero impedance lines
+09 Line charging B, per unit (F) * (total line charging, +B)
+10 Line MVA rating No 1 (I) Left justify!
+11 Line MVA rating No 2 (I) Left justify!
+12 Line MVA rating No 3 (I) Left justify!
+13 Control bus number
+14 Side (I)
+	0 - Controlled bus is one of the terminals
+	1 - Controlled bus is near the tap side
+	2 - Controlled bus is near the impedance side (Z bus)
+15 Transformer final turns ratio (F)
+16 Transformer (phase shifter) final angle (F)
+17 Minimum tap or phase shift (F)
+18 Maximum tap or phase shift (F)
+19 Step size (F)
+20 Minimum voltage, MVAR or MW limit (F)
+21 Maximum voltage, MVAR or MW limit (F)
+
+BRANCH DATA FOLLOWS 020 ITEMS
+-------------------------------------------------
+1	2	1	1	1	0	0.01938	0.05917	0.0528	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+1	5	1	1	1	0	0.05403	0.22304	0.0492	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+2	3	1	1	1	0	0.04699	0.19797	0.0438	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+2	4	1	1	1	0	0.05811	0.17632	0.0340	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+2	5	1	1	1	0	0.05695	0.17388	0.0346	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+3	4	1	1	1	0	0.06701	0.17103	0.0128	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+4	5	1	1	1	0	0.01335	0.04211	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+4	7	1	1	1	0	0.0    	0.20912	0.0   	0	0	0	0	0	0.978	0.0	0.0	0.0	0.0	0.0	0.0
+4	9	1	1	1	0	0.0    	0.55618	0.0   	0	0	0	0	0	0.969	0.0	0.0	0.0	0.0	0.0	0.0
+5	6	1	1	1	0	0.0    	0.25202	0.0   	0	0	0	0	0	0.932	0.0	0.0	0.0	0.0	0.0	0.0
+6	1	1	1	1	0	0.09498	0.19890	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+6	2	1	1	1	0	0.12291	0.25581	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+6	3	1	1	1	0	0.06615	0.13027	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+7	8	1	1	1	0	0.0    	0.17615	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+7	9	1	1	1	0	0.0    	0.11001	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+9	0	1	1	1	0	0.03181	0.08450	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+9	4	1	1	1	0	0.12711	0.27038	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+10	11	1	1	1	0	0.08205	0.19207	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+12	13	1	1	1	0	0.22092	0.19988	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+13	14	1	1	1	0	0.17093	0.34802	0.0   	0	0	0	0	0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+-999
+-------------------------------------------------
+01 Bus number (I).
+02 Rated power (MVA)
+03 Inertia constant
+04 Damping constant
+05 Armature resistance r_a (pu)
+06 Leakage reactance x_L (pu)
+07 Direct axis quadrature reactance x_d (pu)
+08 Direct axis transient reactance x'_d (pu)
+09 Direct axis subtransient reactance x''_d (pu)
+10 Direct axis rotor transient magnetization time constant T'_do
+11 Direct axis rotor subtransient magnetization time constant T''_do
+12 Quadrature axis quadrature reactance x_q (pu)
+13 Quadrature axis transient reactance x'_q (pu)
+14 Quadrature axis subtransient reactance x''_q (pu)
+15 Quadrature axis rotor transient magnetization time constant T'_qo
+16 Quadrature axis rotor subtransient magnetization time constant T''_qo
+Data taken from MODELING AND SIMULATION OF IEEE 14 BUS SYSTEM WITH FACTS CONTROLLERS
+
+BEGIN GENERATOR DATA 050 items
+-------------------------------------------------
+1	615	5.148	2	0.00	0.2396	0.8979	0.2995	0.23	7.4	0.03	0.646	0.646	0.4	0.00	0.033
+2	60	6.54	2	0.0031	0.00	1.05	0.1850	0.13	6.1	0.04	0.98	0.36	0.13	0.3	0.099
+3	60	6.54	2	0.0031	0.00	1.05	0.1850	0.13	6.1	0.04	0.98	0.36	0.13	0.3	0.099
+6	25	5.06	2	0.0014	0.134	1.25	0.232	0.12	4.75	0.06	1.22	0.715	0.12	1.5	0.21
+8	25	5.06	2	0.0041	0.134	1.25	0.232	0.12	4.75	0.06	1.22	0.715	0.12	1.5	0.21
+-999
+LOSS ZONES FOLLOWS 001 ITEMS
+  1 IEEE 14 BUS
+-99
+INTERCHANGE DATA FOLLOWS 001 ITEMS
+ 1    2 Bus 2     HV    0.0  999.99  IEEE14  IEEE 14 Bus Test Case
+-9
+TIE LINES FOLLOWS 001 ITEMS
+-999
+END OF DATA
