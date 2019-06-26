@@ -1,9 +1,9 @@
-Date: 08/19/93
-Originator's name: UW ARCHIVE
-MVA base: 100.0
-Year: 1962
-Season: W
-Case identification: IEEE 14 Bus Test Case
+Date:		08/19/93
+Name:		UW ARCHIVE
+MVA base:	100.0
+Year:		1962
+Season:		W
+Case id:	IEEE 14 Bus Test Case
 -------------------------------------------------
 Bus data columns:
 01 Bus number (I) *

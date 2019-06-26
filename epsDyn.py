@@ -56,6 +56,7 @@ parser = argparse.ArgumentParser(
 import matrixFunctions as mF
 Jac = mF.Jac
 h = mF.h
+Z = mF.Z
 
 # -------------------------------------------------
 # (2) CUSTOM FUNCTIONS AND ARGUMENTS{{{1
@@ -146,6 +147,18 @@ parser.add_argument(	'--deltamax',
 			default = 10,
 			help = 'Newton-Raphson numerical method maximum  step magnitude to consider as divergence. Default is 10.')
 
+# POWER FLOW OPTION
+parser.add_argument(	'--powerflow', '-pf',
+			default = False,
+			action = 'store_true',
+			help = 'Perform Power Flow calculation of the target system.')
+
+# STATE ESTIMATION
+parser.add_argument(	'--estimatestate', '-se',
+			default = False,
+			action = 'store_true',
+			help = 'Perform State Estimation of the Target Sysem.')
+
 
 # Gathering arguments and options
 args = parser.parse_args()
@@ -156,6 +169,8 @@ networkFile = args.net
 obs = args.obs
 crit = args.crit
 cls = args.cls
+powerflow = args.powerflow
+estimatestate = args.estimatestate
 
 if clear:
 	clear()
@@ -176,12 +191,24 @@ with open(networkFile,'r') as fileData:
 	# Searching for bus data start card
 	while breakFlag==True:
 		line = readtabline(fileData)
-		if line[0] == 'BUS DATA FOLLOWS':
-			nbars = int(line[1])	# Extracting number of buses in system
+		if line[0] == 'MVA base:':
+			Sb = float(line[1])	# Extracting power base value
 			breakFlag = False
 
-	bsh = np.zeros((nbars,nbars))
-	gsh = np.zeros((nbars,nbars))
+	# Searching for bus data start card
+	breakFlag = True
+	while breakFlag==True:
+		line = readtabline(fileData)
+		if line[0] == 'BUS DATA FOLLOWS':
+			nbus = int(line[1])	# Extracting number of buses in system
+			breakFlag = False
+
+	bsh = np.zeros((nbus,nbus))
+	gsh = np.zeros((nbus,nbus))
+	Pload = np.zeros(nbus)
+	Qload = np.zeros(nbus)
+	Pger = np.zeros(nbus)
+	Qger = np.zeros(nbus)
 
 	breakFlag = True
 	i = 0
@@ -190,6 +217,10 @@ with open(networkFile,'r') as fileData:
 	line = readtabline(fileData)
 
 	while breakFlag == True:
+		Pload[i] = float(line[7])/Sb
+		Qload[i] = float(line[8])/Sb
+		Pger[i] = float(line[9])/Sb
+		Qger[i] = float(line[10])/Sb
 		gsh[i,i] = float(line[15])
 		bsh[i,i] = float(line[16])
 		i += 1
@@ -210,14 +241,14 @@ with open(networkFile,'r') as fileData:
 	
 	fileData.readline()	# Skip the '---' line
 	# Initializing resistance and reactance matrixes
-	r = np.zeros((nbars,nbars))
-	x = np.zeros((nbars,nbars))
+	r = np.zeros((nbus,nbus))
+	x = np.zeros((nbus,nbus))
 
 	# Initializing tap levels matrix
-	a = np.ones((nbars,nbars))
+	a = np.ones((nbus,nbus))
 	
 	# Initializing connection matrix
-	K = [ [] for i in range(nbars)]
+	K = [ [] for i in range(nbus)]
 
 	breakFlag = True
 	i = 0
@@ -250,17 +281,17 @@ with open(networkFile,'r') as fileData:
 	# (3.1.5) Building Y matrix
 	print(' Done.\n --> Building Y matrix... ',end='')
 	
-	z = array([[r[m,n] + 1j*x[m,n] for m in range(nbars)] for n in range(nbars)])
-	y = array([[1/z[m,n] if z[m,n] != 0 else 0 for m in range(nbars)] for n in range(nbars)])
+	z = array([[r[m,n] + 1j*x[m,n] for m in range(nbus)] for n in range(nbus)])
+	y = array([[1/z[m,n] if z[m,n] != 0 else 0 for m in range(nbus)] for n in range(nbus)])
 
 	g = real(copy(y))
 	b = imag(copy(y))
 
-	bsh = array([[ bsh[m,n]/2 if m!=n else bsh[m,n] for n in range(nbars)] for m in range(nbars)])
+	bsh = array([[ bsh[m,n]/2 if m!=n else bsh[m,n] for n in range(nbus)] for m in range(nbus)])
 
 	Y  = -a*transpose(a)*y
 
-	for k in range(nbars): Y[k,k] = 1j*bsh[k,k] + sum([a[k,m]**2*y[k,m] + 1j*bsh[k,m] for m in K[k]])
+	for k in range(nbus): Y[k,k] = 1j*bsh[k,k] + sum([a[k,m]**2*y[k,m] + 1j*bsh[k,m] for m in K[k]])
 	print(' Done.' )
 
 
@@ -280,9 +311,9 @@ with open(measurementsFile,'r') as fileData:
 	print(' --> Beginning active power measurements data reading... ',end='' )
 
 	fileData.readline()
-	isP = np.zeros((nbars,nbars),dtype=int)
-	wP = np.zeros((nbars,nbars))
-	P = np.zeros((nbars,nbars))
+	isP = np.zeros((nbus,nbus),dtype=int)
+	wP = np.zeros((nbus,nbus))
+	P = np.zeros((nbus,nbus))
 
 	# (3.2.2) Acquiring active power measures
 	breakFlag = True
@@ -305,8 +336,8 @@ with open(measurementsFile,'r') as fileData:
 		line = readtabline(fileData)
 		if line[0] == 'BEGGINING REACTIVE POWER MEASURES': breakFlag = False
 
-	wQ = np.zeros((nbars,nbars))
-	Q = np.zeros((nbars,nbars))
+	wQ = np.zeros((nbus,nbus))
+	Q = np.zeros((nbus,nbus))
 
 	fileData.readline()
 	breakFlag = True
@@ -331,9 +362,9 @@ with open(measurementsFile,'r') as fileData:
 		if line[0] == 'BEGGINING VOLTAGE MEASURES': breakFlag = False
 	fileData.readline()
 
-	isV = np.zeros(nbars,dtype=int)
-	wV = np.zeros(nbars)
-	Vm = np.zeros(nbars)
+	isV = np.zeros(nbus,dtype=int)
+	wV = np.zeros(nbus)
+	Vm = np.zeros(nbus)
 	breakFlag = True
 	line = readtabline(fileData)
 	while breakFlag == True:
@@ -358,10 +389,10 @@ with open(measurementsFile,'r') as fileData:
 
 		# Preallocating isPseudo with one row which will be deleted after
 		isPseudo = np.zeros((1,2))
-		pseudoP = np.zeros((nbars,nbars))
-		pseudoWP = np.zeros((nbars,nbars))
-		pseudoQ = np.zeros((nbars,nbars))
-		pseudoWQ = np.zeros((nbars,nbars))
+		pseudoP = np.zeros((nbus,nbus))
+		pseudoWP = np.zeros((nbus,nbus))
+		pseudoQ = np.zeros((nbus,nbus))
+		pseudoWQ = np.zeros((nbus,nbus))
 
 		breakFlag = True
 		while breakFlag == True:
@@ -397,18 +428,18 @@ if obs:
 	if verbose > 0: print('\n' + '-'*50 + '\n TESTING OBSERVABILITY \n' + '-'*50)
 	else: print('\n --> Beggining observability test.',end='')
 
-	obs = np.zeros((numP,nbars),dtype=float)
+	obs = np.zeros((numP,nbus),dtype=float)
 
 	i = 0
-	for m in range(nbars):
-		for n in range(nbars):
+	for m in range(nbus):
+		for n in range(nbus):
 			if isP[m,n]:
 				if m == n:
-					for k in range(nbars):
+					for k in range(nbus):
 						if k != m and k in K[m]: obs[i,k] = -1
 						elif k == m: obs[i,k] = len(K[m])
 				else:
-					for k in range(nbars):
+					for k in range(nbus):
 						if k==m: obs[i,k] = 1
 						if k==n: obs[i,k] = -1
 				i += 1
@@ -460,18 +491,18 @@ if obs:
 					addedPseudoNumber = 0
 
 				# Building new observability and gain matrices
-				obs = np.zeros((numP + addedPseudoNumber + 1,nbars))
+				obs = np.zeros((numP + addedPseudoNumber + 1,nbus))
 
 				i = 0
-				for m in range(nbars):
-					for n in range(nbars):
+				for m in range(nbus):
+					for n in range(nbus):
 						if tempIsP[m,n]:
 							if m == n:
-								for k in range(nbars):
+								for k in range(nbus):
 									if k != m and k in K[m]: obs[i,k] = -1
 									elif k == m: obs[i,k] = len(K[m])
 							else:
-								for k in range(nbars):
+								for k in range(nbus):
 									if k==m: obs[i,k] = 1
 									if k==n: obs[i,k] = -1
 							i += 1
@@ -526,26 +557,26 @@ if crit:
 	tempIsP = copy(isP)
 
 	# Sweeping through available measurements
-	for p in range(nbars):
-		for q in range(nbars):
+	for p in range(nbus):
+		for q in range(nbus):
 			if isP[p,q]:
 				if verbose > 0: print(' --> Removing measure ({0:3},{1:3})...'.format(p+1,q+1), end='')
 				# Temporarily removing measure (p,q)
 				tempIsP[p,q] = 0
 
 				# Building observability matrix again
-				obs = np.zeros((numP-1,nbars),dtype=float)
+				obs = np.zeros((numP-1,nbus),dtype=float)
 
 				i = 0
-				for m in range(nbars):
-					for n in range(nbars):
+				for m in range(nbus):
+					for n in range(nbus):
 						if tempIsP[m,n]:
 							if m == n:
-								for k in range(nbars):
+								for k in range(nbus):
 									if k != m and k in K[m]: obs[i,k] = -1
 									elif k == m: obs[i,k] = len(K[m])
 							else:
-								for k in range(nbars):
+								for k in range(nbus):
 									if k==m: obs[i,k] = 1
 									if k==n: obs[i,k] = -1
 							i += 1
@@ -592,280 +623,268 @@ if crit:
 # (3.5.1) CONSTRUCTING W MATRIX
 W = np.empty((2*numP + numV,1))			# Preallocating
 i = 0						# Starting counter
-for j in range(nbars):	
-	for n in range(nbars):
+for j in range(nbus):	
+	for n in range(nbus):
 		if isP[j,n]:
 			W[i] = 1/wP[j,n]**2
 			i+=1
-for j in range(nbars):	
-	for n in range(nbars):
+for j in range(nbus):	
+	for n in range(nbus):
 		if isP[j,n]:
 			W[i] = 1/wQ[j,n]**2
 			i += 1
 
-for j in range(nbars):	
+for j in range(nbus):	
 	if isV[j]:
 		W[i] = 1/wV[j]**2
 		i += 1
 W = diag(W)
 
 # (3.5.2) DESCRIBING MEASUREMENT ARRAY Z = [P,Q,V].
-if verbose > 1: pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
-i=0
-Z = np.empty((2*numP + numV,1))
-for j in range(nbars):	
-	for n in range(nbars):
-		if isP[j,n]:
-			Z[i] = P[j,n]
-			if verbose > 1: print('Z[{0:2.0f}] = P[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,P[j,n]))
-			i+=1
-for j in range(nbars):	
-	for n in range(nbars):
-		if isP[j,n]:
-			Z[i] = Q[j,n]
-			if verbose > 1: print('Z[{0:2.0f}] = Q[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,Q[j,n]))
-			i += 1
 
-for j in range(nbars):	
-	if isV[j]:
-		Z[i] = Vm[j]
-		if verbose > 1: print('Z[{0:2.0f}] = V[{1:3}]     = {2:>10f}'.format(i+1,j+1,Vm[j]))
-		i += 1
+Zflat = Z(P,Q,isP,Vm,isV)
+
+if verbose > 1: 
+	pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
+	for j in range(nbus):	
+		for n in range(nbus):
+			if isP[j,n]:
+				print('Z[{0:2.0f}] = P[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,P[j,n]))
+				i+=1
+	for j in range(nbus):	
+		for n in range(nbus):
+			if isP[j,n]:
+				if verbose > 1: print('Z[{0:2.0f}] = Q[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,Q[j,n]))
+				i += 1
+
+	for j in range(nbus):	
+		if isV[j]:
+			if verbose > 1: print('Z[{0:2.0f}] = V[{1:3}]     = {2:>10f}'.format(i+1,j+1,Vm[j]))
+			i += 1
 
 # (3.5.3) PRINTING RESULTS
 if verbose > 1:
 	print('\n' + '-'*50 + '\n DESCRIBING SYSTEM \n' + '-'*50)
-	print(' --> r = {0}\n\n --> x = {1}\n\n --> g = \n{2}\n\n --> b = \n{3}\n\n --> bsh = \n{4}\n\n --> Y = \n{5} \n\n --> stdP = \n{6}\n\n --> stdQ = \n{7}\n\n --> a = \n{8}\n'.format(r,x,g,b,bsh,Y,stdP,stdQ,a))
+	print(' --> r = {0}\n\n --> x = {1}\n\n --> g = \n{2}\n\n --> b = \n{3}\n\n --> bsh = \n{4}\n\n --> Y = \n{5} \n\n --> stdP = \n{6}\n\n --> stdQ = \n{7}\n\n --> a = \n{8}\n'.format(r,x,g,b,bsh,Y,wP,wQ,a))
 
 # -------------------------------------------------
 
 # -------------------------------------------------
 # (7) SETTING UP NUMERICAL METHOD FOR STATE ESTIATION {{{1
 # -------------------------------------------------
-# (5.1) Initial guess: flat start
-V = np.ones(nbars)
-theta = np.zeros(nbars)
-
-if verbose > 1:
-	print('\n' + '-'*50 + '\n STATE ESTIMATION FLAT START \n' + '-'*50)
-else:
-	print(' --> Beggining flat start calculations... ', end='')
-
-if verbose > 1:
-	print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(J(V,theta),h(V,theta)))
-
-# (5.2) Defining simulation parameters from the arguments passed to the script
-absTol = args.tol
-deltaMax = args.deltamax
-maxIter = args.maxiter
-
-# (5.3) Initiating iteration counter
-itCount = 0	
-
-# (5.4) Calculating jacobian and its gradient at flat start
-H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
-grad = -transpose(H) @ W @ (Z - h(V,theta,K,a,y,Y,bsh,isP,isV))
-
-if verbose <= 1: print('Done.')
-
-# (5.5) Printing method parameters
-
-if verbose > 1:
-	print('\n --> Norm of the jacobian gradient at flat start: |grad(J)| = {0}'.format(norm(grad)))
-
-if verbose > 0:
-	pause('\n --> Next step is the numerical method. Press <ENTER> to continue.')
-	print('\n' + '-'*50 + '\n BEGGINING STATE ESTIMATION NUMERICAL METHOD \n' + '-'*50)
-	print('\n --> Newton-Raphson method parameters: tolerance = {0}, maximum step = {1}, maximum interations = {2}'.format(absTol,deltaMax,maxIter))
-else:
-	print(' --> Beggining numerical method... ', end='')
-
-# (5.6) Start time counte6
-tstart = time.time()
-
-# -------------------------------------------------
-# (8) STARTING NUMERICAL METHOD FOR STATE ESTIMATION{{{1
-# -------------------------------------------------
-
-while(True):
-# (6) STARTING ITERATIONS
-
-	# (6.1) Increasing iteration counter
-	itCount += 1
-	
-	# (6.2) Printing iteration report
-	if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
-	
-	# (6.3) Calculating jacobian
+if estimatestate:
+	# (5.1) Initial guess: flat start
+	V = np.ones(nbus)
+	theta = np.zeros(nbus)
 	H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
-	
-	# (6.4) Calculating gain matrix
-	U = transpose(H) @ W @ H
 
-	# (6.5) Calculating state update
-	dX = inv(U) @ transpose(H) @ W @ (Z - h(V,theta,K,a,y,Y,bsh,isP,isV))
-
-	# (6.6) Updating V and theta
-	theta[1:] += dX[0:nbars-1,0]
-	V += dX[nbars-1:,0]
-
-	# (6.7) Calculating jacobian gradient
-	grad = -transpose(H) @ W @ (Z - h(V,theta,K,a,y,Y,bsh,isP,isV))
-	
-	# (6.8) Printing iteration results
-	if verbose > 0:
-		print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}\n --> |grad(J)| = {3}'.format(norm(dX),transpose(dX[nbars-1:,0]),dX[0:nbars-1,0],transpose(norm(grad))))
 	if verbose > 1:
-		print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(J(V,theta),(Z-h(V,theta))/norm(Z-h(V,theta)),norm(Z-h(V,theta))))
+		print('\n' + '-'*50 + '\n STATE ESTIMATION FLAT START \n' + '-'*50)
+	else:
+		print(' --> Beggining flat start calculations... ', end='')
 
-	# (6.9) Testing for iteration sucess or divergence
-	if norm(dX) < absTol: # (6.8.1) If success
-		print('\n --> Sucess!')
-		print('\n' + '-'*50 + '\n STATE ESTIMATION CONVERGENCE RESULTS \n' + '-'*50)
-		print('\n --> Numerical method stopped at iteration {1} with |deltaX| = {0}.\n --> |grad(J)| = {2}'.format(norm(dX),itCount,norm(grad)))
-		break	
+	if verbose > 1:
+		print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(H,h(V,theta,K,a,y,Y,bsh,isP,isV)))
 
-	if norm(dX) > deltaMax: #(6.8.2) If diverted
-		print(' --> Error: the solution appears to have diverged on iteration number {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
-		break
+	# (5.2) Defining simulation parameters from the arguments passed to the script
+	absTol = args.tol
+	deltaMax = args.deltamax
+	maxIter = args.maxiter
+
+	# (5.3) Initiating iteration counter
+	itCount = 0	
+
+	# (5.4) Calculating jacobian and its gradient at flat start
+
+
+	grad = -transpose(H) @ W @ (Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))
+
+
+	if verbose <= 1: print('Done.')
+
+	# (5.5) Printing method parameters
+
+	if verbose > 1:
+		print('\n --> Norm of the jacobian gradient at flat start: |grad(J)| = {0}'.format(norm(grad)))
+
+	if verbose > 0:
+		pause('\n --> Next step is the power flow numerical method. Press <ENTER> to continue.')
+		print('\n' + '-'*50 + '\n BEGGINING STATE ESTIMATION NUMERICAL METHOD \n' + '-'*50)
+		print('\n --> Newton-Raphson method parameters: tolerance = {0}, maximum step = {1}, maximum interations = {2}'.format(absTol,deltaMax,maxIter))
+	else:
+		print('\n --> Beggining numerical method... ', end='')
+
+	# (5.6) Start time counte6
+	tstart = time.time()
+
+	# -------------------------------------------------
+	# (8) STARTING NUMERICAL METHOD FOR STATE ESTIMATION{{{1
+	# -------------------------------------------------
+
+	while(True):
+	# (6) STARTING ITERATIONS
+
+		# (6.1) Increasing iteration counter
+		itCount += 1
+		
+		# (6.2) Printing iteration report
+		if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
+		
+		# (6.3) Calculating jacobian
+		H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
+		
+		# (6.4) Calculating gain matrix
+		U = transpose(H) @ W @ H
+
+		# (6.5) Calculating state update
+		dX = inv(U) @ transpose(H) @ W @ (Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))
+
+		# (6.6) Updating V and theta
+		theta[1:] += dX[0:nbus-1,0]
+		V += dX[nbus-1:,0]
+
+		# (6.7) Calculating jacobian gradient
+		grad = -transpose(H) @ W @ (Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))
+		
+		# (6.8) Printing iteration results
+		if verbose > 0:
+			print('\n --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}\n --> |grad(J)| = {3}'.format(norm(dX),transpose(dX[nbus-1:,0]),dX[0:nbus-1,0],transpose(norm(grad))))
+		if verbose > 1:
+			print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(Jac(V,theta,K,a,y,Y,bsh,isP,isV),(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))/norm(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)),norm(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))))
+
+		# (6.9) Testing for iteration sucess or divergence
+		if norm(dX) < absTol: # (6.8.1) If success
+			print('\n --> Sucess!')
+			print('\n' + '-'*50 + '\n STATE ESTIMATION CONVERGENCE RESULTS \n' + '-'*50)
+			print('\n --> Numerical method stopped at iteration {1} with |deltaX| = {0}.\n --> |grad(J)| = {2}'.format(norm(dX),itCount,norm(grad)))
+			break	
+
+		if norm(dX) > deltaMax: #(6.8.2) If diverted
+			print('\n --> Error: the solution appears to have diverged on iteration number {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
+			break
 	
-	if itCount > maxIter - 1: # (6.8.3) If reached maximum iteration
-		print(' --> Error: the solution appears to have taken too long. Final iteration: {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
-		break
+		if itCount > maxIter - 1: # (6.8.3) If reached maximum iteration
+			print('\n --> Error: the solution appears to have taken too long. Final iteration: {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
+			break
 
 	# (6.10) Pausing for each iteration
 	if verbose>1:
 		pause('\n --> Program paused for next iteration. ')
 
 
-# (6.11) Calculating elapsed time
-elapsed = time.time() - tstart
+	# (6.11) Calculating elapsed time
+	elapsed = time.time() - tstart
 
-# (6.12) Calculating normalized residual
-r = Z - h(V,theta,K,a,y,Y,bsh,isP,isV)
-cov = inv(W) - H @ inv(U) @ transpose(H)
-rn = array([ r[i]/sqrt(cov[i,i]) for i in range(len(r))])
+	# (6.12) Calculating normalized residual
+	r = Z(P,Q,isP,np.zeros(nbus),isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)
+	cov = inv(W) - H @ inv(U) @ transpose(H)
+	rn = array([ r[i]/sqrt(cov[i,i]) for i in range(len(r))])
 
-# (6.13) Printing convergence results
-print(' --> Final result:\n\n	theta = {0} \n\n	V     = {1}'.format(theta,V))
+	# (6.13) Printing convergence results
+	print(' --> Final result:\n\n	theta = {0} \n\n	V     = {1}'.format(theta,V))
 
-if verbose > 1: print('\n --> Residual = \n{2}\n\n --> Normalized residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,rn,r))
+	if verbose > 1: print('\n --> Residual = \n{2}\n\n --> Normalized residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,rn,r))
 
 #--------------------------------------------------
 # (7) SETTING UP NUMERICAL METHOD FOR POWER FLOW {{{1
 # -------------------------------------------------
+if powerflow:
+	# (5.1) Initial guess: flat start
+	V = .9*np.ones(nbus)
+	theta = np.zeros(nbus)
+	P = np.diag(Pger-Pload)
+	Q = np.diag(Qger - Qload)
+	isP = np.eye(nbus)
+	isV = np.zeros(nbus)
 
-# (5.1) Initial guess: flat start
-V = np.ones(nbars)
-theta = np.zeros(nbars)
+	numP = int(isP.sum())
+	numV = int(isV.sum())
 
-isP = np.ones((nbars,nbars))
-isV = np.ones(nbars)
+	# (3.5.2) DESCRIBING MEASUREMENT ARRAY Z = [P,Q,V].
+	if verbose > 1: pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
 
-numP = int(isP.sum())
-numV = int(isV.sum())
-
-# (3.5.2) DESCRIBING MEASUREMENT ARRAY Z = [P,Q,V].
-if verbose > 1: pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
-i=0
-Z = np.empty((2*numP + numV,1))
-for j in range(nbars):	
-	for n in range(nbars):
-		if isP[j,n]:
-			Z[i] = P[j,n]
-			i+=1
-for j in range(nbars):	
-	for n in range(nbars):
-		if isP[j,n]:
-			Z[i] = Q[j,n]
-			i += 1
-
-for j in range(nbars):	
-	if isV[j]:
-		Z[i] = Vm[j]
-		i += 1
-
-if verbose > 1:
-	print('\n' + '-'*50 + '\n POWER FLOW FLAT START \n' + '-'*50)
-else:
-	print(' --> Beggining flat start calculations... ', end='')
-
-if verbose > 1:
-	print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(J(V,theta),h(V,theta)))
-
-# (5.2) Defining simulation parameters from the arguments passed to the script
-absTol = args.tol
-deltaMax = args.deltamax
-maxIter = args.maxiter
-
-# (5.3) Initiating iteration counter
-itCount = 0	
-
-if verbose > 0:
-	pause('\n --> Next step is the numerical method. Press <ENTER> to continue.')
-	print('\n' + '-'*50 + '\n BEGGINING STATE ESTIMATION NUMERICAL METHOD \n' + '-'*50)
-	print('\n --> Newton-Raphson method parameters: tolerance = {0}, maximum step = {1}, maximum interations = {2}'.format(absTol,deltaMax,maxIter))
-else:
-	print(' --> Beggining numerical method... ', end='')
-
-# (5.6) Start time counte6
-tstart = time.time()
-
-# -------------------------------------------------
-# (8) STARTING NUMERICAL METHOD FOR POWER FLOW{{{1
-# -------------------------------------------------
-
-while(True):
-# (6) STARTING ITERATIONS
-
-	# (6.1) Increasing iteration counter
-	itCount += 1
-	
-	# (6.2) Printing iteration report
-	if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
-	
-	# (6.3) Calculating jacobian
-	H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
-	print(H.shape)
-	print(Z.shape)
-
-	# (6.5) Calculating state update
-	dX = transpose(H) @ (Z - h(V,theta,K,a,y,Y,bsh,isP,isV))
-
-	# (6.6) Updating V and theta
-	theta[1:] += dX[0:nbars-1,0]
-	V += dX[nbars-1:,0]
-	
-	# (6.8) Printing iteration results
-	if verbose > 0:
-		print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[nbars-1:,0]),dX[0:nbars-1,0]))
 	if verbose > 1:
-		print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(J(V,theta),(Z-h(V,theta))/norm(Z-h(V,theta)),norm(Z-h(V,theta))))
+		print('\n' + '-'*50 + '\n POWER FLOW FLAT START \n' + '-'*50)
+	else:
+		print('\n --> Beggining power flow calculations... ', end='')
 
-	# (6.9) Testing for iteration sucess or divergence
-	if norm(dX) < absTol: # (6.8.1) If success
-		print('\n --> Sucess!')
-		print('\n' + '-'*50 + '\n POWER FLOW CONVERGENCE RESULTS \n' + '-'*50)
-		print('\n --> Numerical method stopped at iteration {1} with |deltaX| = {0}.'.format(norm(dX),itCount))
-		break	
+	if verbose > 1:
+		print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(Jac(V,theta,K,a,y,Y,bsh,isP,isV),h(V,theta,K,a,y,Y,bsh,isP,isV)))
 
-	if norm(dX) > deltaMax: #(6.8.2) If diverted
-		print(' --> Error: the solution appears to have diverged on iteration number {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
-		break
-	
-	if itCount > maxIter - 1: # (6.8.3) If reached maximum iteration
-		print(' --> Error: the solution appears to have taken too long. Final iteration: {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
-		break
+	# (5.2) Defining simulation parameters from the arguments passed to the script
+	absTol = args.tol
+	deltaMax = args.deltamax
+	maxIter = args.maxiter
 
-	# (6.10) Pausing for each iteration
-	if verbose>1:
-		pause('\n --> Program paused for next iteration. ')
+	# (5.3) Initiating iteration counter
+	itCount = 0	
+
+	if verbose > 0:
+		pause('\n --> Next step is the numerical method. Press <ENTER> to continue.')
+		print('\n' + '-'*50 + '\n BEGGINING POWER FLOW NUMERICAL METHOD \n' + '-'*50)
+		print('\n --> Newton-Raphson method parameters: tolerance = {0}, maximum step = {1}, maximum interations = {2}'.format(absTol,deltaMax,maxIter))
+	else:
+		print('\n --> Beggining numerical method... ', end='')
+
+	# (5.6) Start time counte6
+	tstart = time.time()
+
+	# -------------------------------------------------
+	# (8) STARTING NUMERICAL METHOD FOR POWER FLOW{{{1
+	# -------------------------------------------------
+
+	while(True):
+	# (6) STARTING ITERATIONS
+
+		# (6.1) Increasing iteration counter
+		itCount += 1
+		
+		# (6.2) Printing iteration report
+		if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
+		
+		# (6.3) Calculating jacobian
+		H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
+		H = np.delete(H,0,axis=0) # Deleting non-V measures
+	#	print(H.shape)
+
+		# (6.5) Calculating state update
+		deltaSLC = np.delete(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV),0,axis=0)
+		dX = inv(H) @ deltaSLC
+
+		# (6.6) Updating V and theta
+		theta[1:] += dX[0:nbus-1,0]
+		V += dX[nbus-1:,0]
+		
+		# (6.8) Printing iteration results
+		if verbose > 0:
+			print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[nbus-1:,0]),dX[0:nbus-1,0]))
+		if verbose > 1:
+			print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(Jac(V,theta,K,a,y,Y,bsh,isP,isV),(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))/norm(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)),norm(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))))
+
+		# (6.9) Testing for iteration sucess or divergence
+		if norm(dX) < absTol: # (6.8.1) If success
+			print('\n --> Sucess!')
+			print('\n' + '-'*50 + '\n POWER FLOW CONVERGENCE RESULTS \n' + '-'*50)
+			print('\n --> Numerical method stopped at iteration {1} with |deltaX| = {0}.'.format(norm(dX),itCount))
+			break	
+
+		if norm(dX) > deltaMax: #(6.8.2) If diverted
+			print('\n --> Error: the solution appears to have diverged on iteration number {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
+			break
+		
+		if itCount > maxIter - 1: # (6.8.3) If reached maximum iteration
+			print(' --> Error: the solution appears to have taken too long. Final iteration: {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
+			break
+
+		# (6.10) Pausing for each iteration
+		if verbose>1:
+			pause('\n --> Program paused for next iteration. ')
 
 
-# (6.11) Calculating elapsed time
-elapsed = time.time() - tstart
+	# (6.11) Calculating elapsed time
+	elapsed = time.time() - tstart
 
-# (6.13) Printing convergence results
-print(' --> Final result:\n\n	theta = {0} \n\n	V     = {1}'.format(theta,V))
+	# (6.13) Printing convergence results
+	print(' --> Final result:\n\n	theta = {0} \n\n	V     = {1}'.format(theta,V))
 
-if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
+	if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
