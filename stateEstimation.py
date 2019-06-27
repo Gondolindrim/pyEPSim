@@ -52,11 +52,6 @@ parser = argparse.ArgumentParser(
 	description = 'Power flow calculator that takes a system data in the IEEE CDF and a measurements file in the LACO CDF.',
 	)
 
-# (1.7) Jacobian matrix functions
-import matrixFunctions as mF
-Jac = mF.Jac
-h = mF.h
-
 # -------------------------------------------------
 # (2) CUSTOM FUNCTIONS AND ARGUMENTS{{{1
 # -------------------------------------------------
@@ -261,6 +256,9 @@ with open(networkFile,'r') as fileData:
 	Y  = -a*transpose(a)*y
 
 	for k in range(nbars): Y[k,k] = 1j*bsh[k,k] + sum([a[k,m]**2*y[k,m] + 1j*bsh[k,m] for m in K[k]])
+
+	G = real(copy(Y))
+	B = imag(copy(Y))
 	print(' Done.' )
 
 
@@ -635,19 +633,153 @@ for j in range(nbars):
 # (3.5.3) PRINTING RESULTS
 if verbose > 1:
 	print('\n' + '-'*50 + '\n DESCRIBING SYSTEM \n' + '-'*50)
-	print(' --> r = {0}\n\n --> x = {1}\n\n --> g = \n{2}\n\n --> b = \n{3}\n\n --> bsh = \n{4}\n\n --> Y = \n{5} \n\n --> stdP = \n{6}\n\n --> stdQ = \n{7}\n\n --> a = \n{8}\n'.format(r,x,g,b,bsh,Y,stdP,stdQ,a))
+	print(' --> r = {8}\n\n --> x --> {8}\n\n g = \n{2}\n\n --> b = \n{3}\n\n --> G = \n{0}\n\n --> B = \n{1}\n\n--> bsh = \n{4}\n\n --> stdP = \n{5}\n\n --> stdQ = \n{6}\n\n --> a = \n{7}\n'.format(G,B,g,b,bsh,wP,wQ,a,r,x))
 
 # -------------------------------------------------
+# (6) DEFINING MATRIX FUNCTIONS {{{1
+# -------------------------------------------------
+
+def dPdT(V,theta):
+	H = np.empty((numP, nbars))	# Preallocating
+	i = 0	# Starting counter
+	for j in range(nbars):	
+		for n in range(nbars):
+			if isP[j,n]:
+				for k in range(nbars):
+					if j==n: # If measuring power injection
+						if k==j: # If calculating on angle j
+							H[i,k] = V[j]*sum([V[m]*(-G[j,m]*sin(theta[j] - theta[m]) + B[j,m]*cos(theta[j] - theta[m])) for m in K[j]])
+						elif (k in K[j]): # If calculating on angle k, n and j are connected
+							H[i,k] = V[j]*V[k]*(G[j,k]*sin(theta[j] - theta[k]) - B[j,k]*cos(theta[j] - theta[k]))
+						else: # If n and j are not connected
+							H[i,k] = 0
+					else:	# If measuring power flow
+						if k!=j and k!=n: # Since power transfer is function of only angles j and n
+							H[i,k] = 0
+						else:
+							if k==j: H[i,k] = V[j]*V[n]*a[j,n]*a[n,j]*(  g[j,n]*sin(theta[j] - theta[n]) - b[j,n]*cos(theta[j] - theta[n]))
+							else: H[i,k] =    V[j]*V[n]*a[j,n]*a[n,j]*( -g[j,n]*sin(theta[j] - theta[n]) + b[j,n]*cos(theta[j] - theta[n]))
+							
+				i+=1
+	# Deleting the reference bar
+	H = np.delete(H,0,axis=1)
+	return H
+
+def dPdV(V,theta):
+	N = np.empty((numP, nbars))
+	i = 0
+	for j in range(nbars):	
+		for n in range(nbars):
+			if isP[j,n]:
+				for k in range(nbars):
+					if j==n:
+						if k==j: 
+							N[i,k] = 2*V[j]*G[j,j] + sum([V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
+						elif k in K[j]: 
+							N[i,k] = V[j]*(G[j,k]*cos(theta[j] - theta[k]) + B[j,k]*sin(theta[j] - theta[k]))
+						else: N[i,k] = 0
+					else:
+						if k!=j and k!=n:
+							N[i,k] = 0
+						else:
+							if k == j: N[i,k] = 2*a[j,n]*V[j]*g[j,n] - a[j,n]*a[n,j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+							else: N[i,k] = -a[j,n]*a[n,j]*V[j]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+				i+=1
+	return N
+
+def dQdT(V,theta):
+	M = np.empty((numP, nbars))
+	i = 0
+	for j in range(nbars):	
+		for n in range(nbars):
+			if isP[j,n]:
+				for k in range(nbars):
+					if j==n: # If measuring power injection
+						if j==k: # If calculating on angle j
+							M[i,k] = V[j]*sum([V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
+						elif (k in K[j] and k!=j):
+							M[i,k] = -V[j]*V[k]*(G[j,k]*cos(theta[j] - theta[k]) + B[j,k]*sin(theta[j] - theta[k]))
+						else: M[i,k] = 0
+					else:
+						if k!=j and k!=n: #Since power transfer is function of only angles j and n
+							M[i,k] = 0
+						else:
+							if k == j: M[i,k] = -a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+							else: M[i,k] = a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+							
+				i+=1
+	M = np.delete(M,0,axis=1)
+	return M
+
+def dQdV(V,theta):
+	L = np.ones((numP, nbars))
+	i = 0
+	for j in range(nbars):	
+		for n in range(nbars):
+			if isP[j,n]:
+				for k in range(nbars):
+					if j==n: # If measuring power injection
+						if j==k: L[i,k] = -2*V[j]*B[j,j] + sum([V[m]*(G[j,m]*sin(theta[j] - theta[m]) - B[j,m]*cos(theta[j] - theta[m])) for m in K[j]])
+						elif (k in K[j]): L[i,k] = V[j]*(G[j,k]*sin(theta[j] - theta[k]) - B[j,k]*cos(theta[j] - theta[k]))
+						else: L[i,k] = 0
+					else:
+						if k!=j and k!=n: #Since power transfer is function of only voltages j and n
+							L[i,k] = 0
+						else:
+							if k == j: L[i,k] = -2*a[j,n]**2*V[j]*(b[j,n] + bsh[j,n]) + a[j,n]*a[n,j]*V[n]*(b[j,n]*cos(theta[j] - theta[n]) - g[j,n]*sin(theta[j] - theta[n]))
+							else: L[i,k] = a[j,n]*a[n,j]*V[j]*(b[j,n]*cos(theta[j] - theta[n]) - g[j,n]*sin(theta[j] - theta[n]))
+				i += 1
+	return L
+
+def h(V,theta):
+	h = np.zeros((2*numP + numV,1))
+	i = 0
+	for j in range(nbars):	
+		for n in range(nbars):
+			if isP[j,n]:
+				if j==n: # If measuring power injection on bar j
+					h[i] = V[j]**2*G[j,j] + V[j]*sum([ V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
+				else:	# If measuring power flux from bar j to n
+					h[i] = V[j]**2*a[j,n]**2*g[j,n] - a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+					
+				i +=1
+				
+	for j in range(nbars):	
+		for n in range(nbars):
+			if isP[j,n]:
+				if j==n:
+					h[i] = -V[j]**2*bsh[j,j] + sum([ -V[j]**2*a[j,m]**2*(b[j,m] + bsh[j,m]) + a[m,j]*a[j,m]*V[j]*V[m]*( -g[j,m]*sin(theta[j] - theta[m]) + b[j,m]*cos(theta[j] - theta[m]) ) for m in K[j]])
+				else:
+					h[i] =  -V[j]**2*a[j,n]**2*(b[j,n] + bsh[j,n]) + a[n,j]*a[j,n]*V[j]*V[n]*( -g[j,n]*sin(theta[j] - theta[n]) + b[j,n]*cos(theta[j] - theta[n]) )
+				i +=1
+
+	for j in range(nbars):	
+		if isV[j]:
+			h[i] = V[j]
+			i += 1
+	return h
+
+def J(V,theta):	
+	O = np.identity(nbars)
+	deleteList = array([i for i in range(nbars) if isV[i]==0])
+	O = np.delete(O,deleteList,axis=0) # Deleting non-V measures
+	O = conc((np.zeros((O.shape[0],O.shape[1]-1)),O),axis=1)
+
+	dP = conc(( dPdT(V,theta), dPdV(V,theta)),axis=1)
+	dQ = conc(( dQdT(V,theta), dQdV(V,theta)),axis=1)
+	dPdQ = conc((dP,dQ),axis=0)
+	
+	return conc((dPdQ,O),axis=0)
 
 # -------------------------------------------------
-# (7) SETTING UP NUMERICAL METHOD FOR STATE ESTIATION {{{1
+# (7) SETTING UP NUMERICAL METHOD {{{1
 # -------------------------------------------------
 # (5.1) Initial guess: flat start
 V = np.ones(nbars)
 theta = np.zeros(nbars)
 
 if verbose > 1:
-	print('\n' + '-'*50 + '\n STATE ESTIMATION FLAT START \n' + '-'*50)
+	print('\n' + '-'*50 + '\n FLAT START \n' + '-'*50)
 else:
 	print(' --> Beggining flat start calculations... ', end='')
 
@@ -663,8 +795,8 @@ maxIter = args.maxiter
 itCount = 0	
 
 # (5.4) Calculating jacobian and its gradient at flat start
-H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
-grad = -transpose(H) @ W @ (Z - h(V,theta,K,a,y,Y,bsh,isP,isV))
+H = J(V,theta)
+grad = -transpose(H) @ W @ (Z - h(V,theta))
 
 if verbose <= 1: print('Done.')
 
@@ -684,7 +816,7 @@ else:
 tstart = time.time()
 
 # -------------------------------------------------
-# (8) STARTING NUMERICAL METHOD FOR STATE ESTIMATION{{{1
+# (8) STARTING NUMERICAL METHOD {{{1
 # -------------------------------------------------
 
 while(True):
@@ -697,20 +829,20 @@ while(True):
 	if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 	
 	# (6.3) Calculating jacobian
-	H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
+	H = J(V,theta)
 	
 	# (6.4) Calculating gain matrix
 	U = transpose(H) @ W @ H
 
 	# (6.5) Calculating state update
-	dX = inv(U) @ transpose(H) @ W @ (Z - h(V,theta,K,a,y,Y,bsh,isP,isV))
+	dX = inv(U) @ transpose(H) @ W @ (Z - h(V,theta))
 
 	# (6.6) Updating V and theta
 	theta[1:] += dX[0:nbars-1,0]
 	V += dX[nbars-1:,0]
 
 	# (6.7) Calculating jacobian gradient
-	grad = -transpose(H) @ W @ (Z - h(V,theta,K,a,y,Y,bsh,isP,isV))
+	grad = -transpose(H) @ W @ (Z - h(V,theta))
 	
 	# (6.8) Printing iteration results
 	if verbose > 0:
@@ -742,7 +874,7 @@ while(True):
 elapsed = time.time() - tstart
 
 # (6.12) Calculating normalized residual
-r = Z - h(V,theta,K,a,y,Y,bsh,isP,isV)
+r = Z - h(V,theta)
 cov = inv(W) - H @ inv(U) @ transpose(H)
 rn = array([ r[i]/sqrt(cov[i,i]) for i in range(len(r))])
 
@@ -750,122 +882,3 @@ rn = array([ r[i]/sqrt(cov[i,i]) for i in range(len(r))])
 print(' --> Final result:\n\n	theta = {0} \n\n	V     = {1}'.format(theta,V))
 
 if verbose > 1: print('\n --> Residual = \n{2}\n\n --> Normalized residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,rn,r))
-
-#--------------------------------------------------
-# (7) SETTING UP NUMERICAL METHOD FOR POWER FLOW {{{1
-# -------------------------------------------------
-
-# (5.1) Initial guess: flat start
-V = np.ones(nbars)
-theta = np.zeros(nbars)
-
-isP = np.ones((nbars,nbars))
-isV = np.ones(nbars)
-
-numP = int(isP.sum())
-numV = int(isV.sum())
-
-# (3.5.2) DESCRIBING MEASUREMENT ARRAY Z = [P,Q,V].
-if verbose > 1: pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
-i=0
-Z = np.empty((2*numP + numV,1))
-for j in range(nbars):	
-	for n in range(nbars):
-		if isP[j,n]:
-			Z[i] = P[j,n]
-			i+=1
-for j in range(nbars):	
-	for n in range(nbars):
-		if isP[j,n]:
-			Z[i] = Q[j,n]
-			i += 1
-
-for j in range(nbars):	
-	if isV[j]:
-		Z[i] = Vm[j]
-		i += 1
-
-if verbose > 1:
-	print('\n' + '-'*50 + '\n POWER FLOW FLAT START \n' + '-'*50)
-else:
-	print(' --> Beggining flat start calculations... ', end='')
-
-if verbose > 1:
-	print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(J(V,theta),h(V,theta)))
-
-# (5.2) Defining simulation parameters from the arguments passed to the script
-absTol = args.tol
-deltaMax = args.deltamax
-maxIter = args.maxiter
-
-# (5.3) Initiating iteration counter
-itCount = 0	
-
-if verbose > 0:
-	pause('\n --> Next step is the numerical method. Press <ENTER> to continue.')
-	print('\n' + '-'*50 + '\n BEGGINING STATE ESTIMATION NUMERICAL METHOD \n' + '-'*50)
-	print('\n --> Newton-Raphson method parameters: tolerance = {0}, maximum step = {1}, maximum interations = {2}'.format(absTol,deltaMax,maxIter))
-else:
-	print(' --> Beggining numerical method... ', end='')
-
-# (5.6) Start time counte6
-tstart = time.time()
-
-# -------------------------------------------------
-# (8) STARTING NUMERICAL METHOD FOR POWER FLOW{{{1
-# -------------------------------------------------
-
-while(True):
-# (6) STARTING ITERATIONS
-
-	# (6.1) Increasing iteration counter
-	itCount += 1
-	
-	# (6.2) Printing iteration report
-	if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
-	
-	# (6.3) Calculating jacobian
-	H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
-	print(H.shape)
-	print(Z.shape)
-
-	# (6.5) Calculating state update
-	dX = transpose(H) @ (Z - h(V,theta,K,a,y,Y,bsh,isP,isV))
-
-	# (6.6) Updating V and theta
-	theta[1:] += dX[0:nbars-1,0]
-	V += dX[nbars-1:,0]
-	
-	# (6.8) Printing iteration results
-	if verbose > 0:
-		print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[nbars-1:,0]),dX[0:nbars-1,0]))
-	if verbose > 1:
-		print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(J(V,theta),(Z-h(V,theta))/norm(Z-h(V,theta)),norm(Z-h(V,theta))))
-
-	# (6.9) Testing for iteration sucess or divergence
-	if norm(dX) < absTol: # (6.8.1) If success
-		print('\n --> Sucess!')
-		print('\n' + '-'*50 + '\n POWER FLOW CONVERGENCE RESULTS \n' + '-'*50)
-		print('\n --> Numerical method stopped at iteration {1} with |deltaX| = {0}.'.format(norm(dX),itCount))
-		break	
-
-	if norm(dX) > deltaMax: #(6.8.2) If diverted
-		print(' --> Error: the solution appears to have diverged on iteration number {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
-		break
-	
-	if itCount > maxIter - 1: # (6.8.3) If reached maximum iteration
-		print(' --> Error: the solution appears to have taken too long. Final iteration: {0}: |deltaX| = {1}.'.format(itCount,norm(dX)))
-		break
-
-	# (6.10) Pausing for each iteration
-	if verbose>1:
-		pause('\n --> Program paused for next iteration. ')
-
-
-# (6.11) Calculating elapsed time
-elapsed = time.time() - tstart
-
-# (6.13) Printing convergence results
-print(' --> Final result:\n\n	theta = {0} \n\n	V     = {1}'.format(theta,V))
-
-if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
