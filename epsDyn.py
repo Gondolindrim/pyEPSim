@@ -4,16 +4,17 @@
 # DEPARTMENT OF ELECTRICAL AND COMPUTER ENGINEERING (SEL)
 # AUTHOR: Álvaro Augusto Volpato
 # DATE: 04/07/2018
-# VERSION: 1.0
-# DESCRIPTION: this program is an electric power system simulator,
-#	using the differential equations and the system
-#	reduced matrix to simulate an EPS.
+# VERSION: 5.0
+# DESCRIPTION: this program is a state estimator for an electric power system.
+# The program first tests for observability, restores it from available pseudo-measures if needed, and pro-
+# ceeds to find critical measurements. Next the program estimates the network's states through a Newton-
+# -Raphson method proposed in MONTICELLI(1995), and tests for normalized residue.
 # -------------------------------------------------
 
 # -------------------------------------------------
 # (1) IMPORTING LIBRARIES  {{{1
 # -------------------------------------------------
-# (1.1) Numpy libraries for standard operations
+# (1.1) Numpy libraries for standard operations  {{{2
 import numpy as np
 norm = np.linalg.norm
 abs = np.absolute
@@ -57,22 +58,42 @@ parser = argparse.ArgumentParser(
 # (2.1) Set printout options: this was added to allow program printout to span the whole terminal 
 np.set_printoptions(suppress=False,linewidth=999,threshold=999)
 
-# (2.2) Clear  function: clears the terminal. Similar to MATLAB's cls 
+# (2.2) "diag" function: takes a n-sized vector and output an n by n diagonal matrix which diagonal is composed of the input vector's elements 
+def diag(dW):
+	W = np.zeros((len(dW),len(dW)))
+	for i in range(len(dW)): W[i,i] = dW[i]
+	return W
+
+# (2.3) Clear  function: clears the terminal. Similar to MATLAB's cls 
 def clear(): os.system('cls' if os.name == 'nt' else 'clear')
 #clear()
 #clear()
 
-# (2.4) "pause" function: halts program execution and asks for enter 
+# (2.3) "pause" function: halts program execution and asks for enter 
 def pause(string):
     programPause = input(string)
 
+# (2.4) readtabline reads a line in a given file f then arranges it in an array which vectors are the strings
+#	in the line that are separated by the tab character '\t'. It also removes the new line '\n' character
+#	from the last slot in the line.
+def readtabline(f):
+	line = f.readline()
+	line = line.strip().split('\t')
+	return line
+
 # (2.5) Arguments and options 
-# Creates arguments:
-# --net [NETWORK FILE] is the target system network file. This string is stored in a 'networkFile' variable
-parser.add_argument(	"--net","-n"
+#	Creates arguments:
+#	--net [NETWORK FILE] is the target system network file. This string is stored in a 'networkFile' variable
+parser.add_argument(	"net",
 			type = str,
 			metavar = 'NETFILE',
 			help='Target network file')
+
+# --meas [MEASUREMENTS FILE] is the target system measurements file. This string is stored in a 'measurementsFile' variable
+parser.add_argument(	"meas",
+			type = str,
+			metavar = 'MEASFILE',
+			help='Target measurements file.')
 
 # Creates options:
 
@@ -80,7 +101,7 @@ parser.add_argument(	"--net","-n"
 parser.add_argument(	'--verbose', '-v',
 			type = int,
 			choices = [0,1,2],
-			default = 1,
+			default = [1],
 			nargs = 1,
 			help = 'Verbose level. 0 for no output, 1 for critical output, 2 for detailed output. Default is 1.')
 
@@ -101,6 +122,25 @@ parser.add_argument(	'--cls',
 			default = False,
 			action = 'store_true',
 			help = 'Clears the terminal before executing the program.')
+
+# TOL option
+parser.add_argument(	'--tol',
+			type=float,
+			default = 1e-4,
+			help = 'Newton-Raphson numerical method tolerance. Default is 1e-4.')
+
+# MAXITER option
+parser.add_argument(	'--maxiter',
+			type = int,
+			default = 10,
+			help = 'Newton-Raphson numerical method maximum iterations. Default is 10.')
+
+# DELTAMAX OPTION
+parser.add_argument(	'--deltamax',
+			type = int,
+			default = 10,
+			help = 'Newton-Raphson numerical method maximum  step magnitude to consider as divergence. Default is 10.')
+
 
 # Gathering arguments and options
 args = parser.parse_args()
@@ -130,42 +170,40 @@ with open(networkFile,'r') as fileData:
 
 	# Searching for bus data start card
 	while breakFlag==True:
-		line = fileData.readline()
-		if line[0:16] == 'BUS DATA FOLLOWS':
-			
-			nbars = int(line[18:20])	# Extracting number of buses in system
+		line = readtabline(fileData)
+		if line[0] == 'BUS DATA FOLLOWS':
+			nbars = int(line[1])	# Extracting number of buses in system
 			breakFlag = False
 
-	vDesired = np.empty(14)
-	angleDesired = np.empty(14)
 	bsh = np.zeros((nbars,nbars))
 	gsh = np.zeros((nbars,nbars))
 
 	breakFlag = True
 	i = 0
-	while breakFlag == True:
-		line = fileData.readline()
-		if line[0:2] == '-9':
-			breakFlag  = False
 
-		if breakFlag == True:
-			vDesired[i] = float(line[27:32])
-			angleDesired[i] = pi/180*float(line[33:40])
-			bsh[i,i] = float(line[114:122])
-			gsh[i,i] = float(line[106:114])
-			i += 1
+	fileData.readline()	# Skip the '---' line		
+	line = readtabline(fileData)
+
+	while breakFlag == True:
+		gsh[i,i] = float(line[15])
+		bsh[i,i] = float(line[16])
+		i += 1
+
+		line = readtabline(fileData)
+		if line[0] == '-999': breakFlag  = False
 
 	# (3.1.3) Searching for branch data start card
 	print(' Done.\n --> Beginning branch data reading... ',end='' )
 
+	breakFlag = True
 	while breakFlag==True:
-		line = fileData.readline()
-		if line[0:18] == 'BRANCH DATA FOLLOWS':
+		line = readtabline(fileData)
+		if line[0] == 'BRANCH DATA FOLLOWS':
 			breakFlag = False
 
 	# (3.1.4) Acquiring branch data parameters
-	fileData.readline()
 	
+	fileData.readline()	# Skip the '---' line
 	# Initializing resistance and reactance matrixes
 	r = np.zeros((nbars,nbars))
 	x = np.zeros((nbars,nbars))
@@ -178,31 +216,31 @@ with open(networkFile,'r') as fileData:
 
 	breakFlag = True
 	i = 0
+	line = readtabline(fileData)
 	while breakFlag == True:
-		line = fileData.readline()
-		if line[0:2] == '-9':
+		fromBus = int(line[0])
+		toBus = int(line[1])
+
+		K[fromBus-1] += [toBus - 1]
+		K[toBus-1] += [fromBus - 1]
+
+		r[fromBus-1,toBus-1] = float(line[6])
+		r[toBus-1,fromBus-1] = float(line[6])
+
+		x[fromBus-1,toBus-1] = float(line[7])
+		x[toBus-1,fromBus-1] = float(line[7])
+
+		bsh[fromBus-1,toBus-1] = float(line[8])	
+		bsh[toBus-1,fromBus-1] = float(line[8])
+
+		if float(line[14]) != 0:
+			a[fromBus-1,toBus-1] = 1/float(line[14])
+
+		i += 1
+
+		line = readtabline(fileData)
+		if line[0] == '-999':
 			breakFlag  = False
-
-		if breakFlag == True:
-			fromBus = int(float(line[0:4]))
-			toBus = int(float(line[5:9]))
-
-			K[fromBus-1] += [toBus - 1]
-			K[toBus-1] += [fromBus - 1]
-
-			r[fromBus-1,toBus-1] = float(line[19:29])
-			r[toBus-1,fromBus-1] = float(line[19:29])
-
-			x[fromBus-1,toBus-1] = float(line[29:40])
-			x[toBus-1,fromBus-1] = float(line[29:40])
-
-			bsh[fromBus-1,toBus-1] = float(line[40:50])	
-			bsh[toBus-1,fromBus-1] = float(line[40:50])
-
-			if float(line[76:82]) != 0:
-				a[fromBus-1,toBus-1] = 1/float(line[76:82])
-
-			i += 1
 
 	# (3.1.5) Building Y matrix
 	print(' Done.\n --> Building Y matrix... ',end='')
@@ -234,9 +272,8 @@ with open(measurementsFile,'r') as fileData:
 	# (3.2.1) Searching for start card
 
 	while breakFlag==True:
-		line = fileData.readline()
-		for k in range(len(line)-31):
-			if line[k:k+31] == 'BEGGINING ACTIVE POWER MEASURES': breakFlag = False
+		line = readtabline(fileData)
+		if line[0] == 'BEGGINING ACTIVE POWER MEASURES': breakFlag = False
 
 	print(' --> Beginning active power measurements data reading... ',end='' )
 
@@ -247,62 +284,75 @@ with open(measurementsFile,'r') as fileData:
 
 	# (3.2.2) Acquiring active power measures
 	breakFlag = True
+	line = readtabline(fileData)
 	while breakFlag == True:
-		line = fileData.readline()
-		if line[0:2] == '-9':
-			breakFlag  = False
+		fromBus = int(float(line[0]))
+		toBus = int(float(line[1]))
+		isP[fromBus-1,toBus-1] = 1
+		P[fromBus-1,toBus-1] = float(line[2])
+		wP[fromBus-1,toBus-1] = float(line[3])
 
-		if breakFlag == True:
-			fromBus = int(float(line[0:3]))
-			toBus = int(float(line[4:7]))
-			isP[fromBus-1,toBus-1] = 1
-			P[fromBus-1,toBus-1] = float(line[8:19])
-			wP[fromBus-1,toBus-1] = float(line[20:31])	
+		line = readtabline(fileData)
+		if line[0] == '-999': breakFlag  = False
 
 	# (3.2.3) Acquiring reactive power measures
 	print(' Done.\n --> Beginning reactive power measurements data reading... ',end='' )
 
-	for i in range(3): fileData.readline()
+	breakFlag = True
+	while breakFlag==True:
+		line = readtabline(fileData)
+		if line[0] == 'BEGGINING REACTIVE POWER MEASURES': breakFlag = False
+
 	wQ = np.zeros((nbars,nbars))
 	Q = np.zeros((nbars,nbars))
 
+	fileData.readline()
 	breakFlag = True
+	line = readtabline(fileData)
 	while breakFlag == True:
-		line = fileData.readline()
-		if line[0:2] == '-9':
-			breakFlag  = False
 
-		if breakFlag == True:
-			fromBus = int(float(line[0:3]))
-			toBus = int(float(line[4:7]))
-			Q[fromBus-1,toBus-1] = float(line[8:19])
-			wQ[fromBus-1,toBus-1] = float(line[20:31])	
+		fromBus = int(float(line[0]))
+		toBus = int(float(line[1]))
+		Q[fromBus-1,toBus-1] = float(line[2])
+		wQ[fromBus-1,toBus-1] = float(line[3])	
+
+		line = readtabline(fileData)
+		if line[0] == '-999':
+			breakFlag  = False
 
 	# (3.2.4) Acquiring voltage measures
 	print(' Done.\n --> Beginning voltage measurements data reading... ',end='' )
 
-	for i in range(3): fileData.readline()
+	breakFlag = True
+	while breakFlag==True:
+		line = readtabline(fileData)
+		if line[0] == 'BEGGINING VOLTAGE MEASURES': breakFlag = False
+	fileData.readline()
+
 	isV = np.zeros(nbars,dtype=int)
 	wV = np.zeros(nbars)
 	Vm = np.zeros(nbars)
 	breakFlag = True
+	line = readtabline(fileData)
 	while breakFlag == True:
-		line = fileData.readline()
-		for k in range(len(line)-1):
-			if line[k:k+2] == '-9':
-				breakFlag  = False
-				break
 
-		if breakFlag == True:
-			fromBus = int(float(line[0:3]))
-			isV[fromBus-1] = 1
-			Vm[fromBus-1] = float(line[8:19])
-			wV[fromBus-1] = float(line[20:31])	
+		fromBus = int(float(line[0]))
+		isV[fromBus-1] = 1
+		Vm[fromBus-1] = float(line[1])
+		wV[fromBus-1] = float(line[2])
+
+		line = readtabline(fileData)
+		if line[0] == '-999': breakFlag  = False	
 
 	# (3.2.5) Acquiring available pseudo-measures
 	if obs:
 		print(' Done.\n --> Beginning available pseudo-measurements data reading... ',end='' )
-		for i in range(4): fileData.readline()
+
+		breakFlag = True
+		while breakFlag==True:
+			line = readtabline(fileData)
+			if line[0] == 'BEGGINING AVAILABLE PSEUDO-MEASURES (IN ORDER OF PRIORITY)': breakFlag = False
+		fileData.readline()
 
 		# Preallocating isPseudo with one row which will be deleted after
 		isPseudo = np.zeros((1,2))
@@ -313,18 +363,17 @@ with open(measurementsFile,'r') as fileData:
 
 		breakFlag = True
 		while breakFlag == True:
-			line = fileData.readline()
-			if line[0:2] == '-9':
-				breakFlag  = False
+			line = readtabline(fileData)
+			if line[0] == '-999': breakFlag  = False
 
 			if breakFlag == True:
-				fromBus = int(float(line[0:3]))
-				toBus = int(float(line[4:7]))
+				fromBus = int(float(line[0]))
+				toBus = int(float(line[1]))
 				isPseudo = conc((isPseudo,array([[fromBus-1,toBus-1]])),axis=0)
-				pseudoP[fromBus-1,toBus-1] = float(line[8:19])
-				pseudoWP[fromBus-1,toBus-1] = float(line[20:30])	
-				pseudoQ[fromBus-1,toBus-1] = float(line[30:40])
-				pseudoWQ[fromBus-1,toBus-1] = float(line[40:50])
+				pseudoP[fromBus-1,toBus-1] = float(line[2])
+				pseudoWP[fromBus-1,toBus-1] = float(line[3])	
+				pseudoQ[fromBus-1,toBus-1] = float(line[4])
+				pseudoWQ[fromBus-1,toBus-1] = float(line[5])
 
 		# Deleting first row from preallocating
 		isPseudo = np.delete(isPseudo,0,axis=0)
@@ -584,7 +633,7 @@ for j in range(nbars):
 # (3.5.3) PRINTING RESULTS
 if verbose > 1:
 	print('\n' + '-'*50 + '\n DESCRIBING SYSTEM \n' + '-'*50)
-	print(' -->  g = \n{2}\n\n --> b = \n{3}\n\n --> G = \n{0}\n\n --> B = \n{1}\n\n--> bsh = \n{4}\n\n --> stdP = \n{5}\n\n --> stdQ = \n{6}\n\n --> a = \n{7}\n'.format(G,B,g,b,bsh,wP,wQ,a))
+	print(' --> r = {8}\n\n --> x --> {8}\n\n g = \n{2}\n\n --> b = \n{3}\n\n --> G = \n{0}\n\n --> B = \n{1}\n\n--> bsh = \n{4}\n\n --> stdP = \n{5}\n\n --> stdQ = \n{6}\n\n --> a = \n{7}\n'.format(G,B,g,b,bsh,wP,wQ,a,r,x))
 
 # -------------------------------------------------
 # (6) DEFINING MATRIX FUNCTIONS {{{1
@@ -737,10 +786,10 @@ else:
 if verbose > 1:
 	print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(J(V,theta),h(V,theta)))
 
-# (5.2) Defining simulation parameters
-absTol = 1e-12	# Absolute tolerance
-deltaMax = 10	# Maximum state step to consider as diverting
-maxIter = 1000	# maximum iterations
+# (5.2) Defining simulation parameters from the arguments passed to the script
+absTol = args.tol
+deltaMax = args.deltamax
+maxIter = args.maxiter
 
 # (5.3) Initiating iteration counter
 itCount = 0	
@@ -758,7 +807,7 @@ if verbose > 1:
 
 if verbose > 0:
 	pause('\n --> Next step is the numerical method. Press <ENTER> to continue.')
-	print('\n' + '-'*50 + '\n BEGGINING NUMERICAL METHOD \n' + '-'*50)
+	print('\n' + '-'*50 + '\n BEGGINING STATE ESTIMATION NUMERICAL METHOD \n' + '-'*50)
 	print('\n --> Newton-Raphson method parameters: tolerance = {0}, maximum step = {1}, maximum interations = {2}'.format(absTol,deltaMax,maxIter))
 else:
 	print(' --> Beggining numerical method... ', end='')
@@ -804,7 +853,7 @@ while(True):
 	# (6.9) Testing for iteration sucess or divergence
 	if norm(dX) < absTol: # (6.8.1) If success
 		print('\n --> Sucess!')
-		print('\n' + '-'*50 + '\n CONVERGENCE RESULTS \n' + '-'*50)
+		print('\n' + '-'*50 + '\n STATE ESTIMATION CONVERGENCE RESULTS \n' + '-'*50)
 		print('\n --> Numerical method stopped at iteration {1} with |deltaX| = {0}.\n --> |grad(J)| = {2}'.format(norm(dX),itCount,norm(grad)))
 		break	
 
