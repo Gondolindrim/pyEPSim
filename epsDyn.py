@@ -392,7 +392,6 @@ with open(networkFile,'r') as fileData:
 
 	print(' Done.')
 
-
 # END OF FILE MANIPULATION: CLOSING FILE --------
 
 # (3.2) ACQUIRING POWER MEASUREMENTS {{{2
@@ -986,8 +985,23 @@ if powerflow or dyn:
 
 	if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
 
+# -------------------------------------------------
+# (8) STARTING NUMERICAL METHOD FOR DYNAMICAL SIMULATION {{{1
+# -------------------------------------------------
 if dyn:
 
 	Yload = [(Pload[i] - 1j*Qload[i])/V[i]**2 for i in range(nbus)]
+	
+	# Permutating the Y matrix
 
-	print(Yload)
+	P = np.eye(nbars)
+
+	for i in range(nbars)
+		for k in range(nGen)
+			if genData[0] == i
+				P[[i,k]] = P[[k,i]]
+				break
+
+
+	P
+			
