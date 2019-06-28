@@ -166,7 +166,7 @@ def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{2
 			i += 1
 	return h
 
-def Z(P,Q,isP,V,isV):
+def Z(P,Q,isP,V,isV): #{{{2
 	numP = int(isP.sum())
 	numV = int(isV.sum())
 	nbus = int(len(V))
@@ -211,3 +211,56 @@ def Jac(V,theta,K,a,y,Y,bsh,isP,isV): #{{{2
 	dPdQ = conc((dP,dQ),axis=0)
 	
 	return conc((dPdQ,O),axis=0)
+
+def reduceGrid(Y,Yload,V,genData): #{{{2
+	nGen = genData.shape[0]
+	nBus = Y.shape[0]
+
+	# Building component matrixes
+
+	Y1 = Y[0:nGen,0:nGen]
+	Y2 = Y[0:nGen,nGen:nBus+1]
+	Y3 = Y[nGen:nBus,0:nGen]
+	Y4 = Y[nGen:nBus+1,nGen:nBus+1]
+
+	Ylg = np.diag(Yload[0:nGen])
+
+	Yll = np.diag(Yload[nGen:nBus])
+
+	Ytrans = np.array([1/(data[4] + 1j*data[7]) for data in genData]) # Y' no livro
+	Ytrans = np.diag(Ytrans)
+	
+	YA = Ytrans
+
+	YB = conc((-Ytrans,np.zeros((nGen,nBus-nGen))),axis=1)
+	
+	YC = conc((-Ytrans,np.zeros((nBus-nGen,nGen))),axis=0)
+
+	YDtop = conc((Ytrans+Y1+Ylg,Y2),axis=1)
+	YDbot = conc((Y3,Y4 + Yll),axis=1)
+
+	YD = conc((YDtop,YDbot),axis=0)
+
+	# Calculating YRED and C and D coefficients
+
+	Yred = YA - YB @ inv(YD) @ YC
+
+	C = np.zeros((nGen,nGen))
+	D = np.zeros((nGen,nGen))
+	
+	for i in range(nGen):
+		for j in range(nGen):
+			if j != i:
+				C[i,j] += V[i]*V[j]*imag(Yred[i,j])
+				D[i,j] += V[i]*V[j]*real(Yred[i,j])
+
+	return [Yred,C,D]
+
+def odeFault(x,t,C,D,Yred,V,pm,genData):
+	nGen = genData.shape[0]
+	F = np.zeros(2*nGen)
+	for k in range(nGen):
+		F[2*k] = x[2*k+1]	# delta} = x[k]
+		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)])  )/(2*genData[k,2]) - genData[k,3]*x[2*k+1]/(2*genData[k,2])	# omega = x[k+1]
+
+	return F

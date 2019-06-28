@@ -29,9 +29,20 @@ inv = np.linalg.inv
 sqrt = np.sqrt
 pi = np.pi
 
+import matplotlib.pyplot as pyplt
+from matplotlib import rc
+#rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+## for Palatino and other serif fonts use:
+rc('font',**{'family':'serif','serif':['Palatino']})
+pyplt.rc('text', usetex=True)
+pyplt.rc('text.latex', preamble=r'\usepackage{xfrac}')
+
+
 # (1.2) SCIPY FOR LU DECOMPOSITION 
 import scipy
 import scipy.linalg
+import scipy.integrate
+odeint = scipy.integrate.odeint
 LU = scipy.linalg.lu
 
 # (1.3) COPY library for temporary variable deep copy 
@@ -163,9 +174,21 @@ parser.add_argument(	'--estimatestate', '-se',
 
 # DYNAMICAL FAULT SIMULATION
 parser.add_argument(	'--dynamicalfault', '-dyn',
-			default = False,
 			action = 'store_true',
+			default = False,
 			help = 'Perform dynamical simulation of the faults in the system. These faults should be listed in the MEAS file.')
+
+# FINAL SIMULATION TIME
+parser.add_argument(	'--time', '-t',
+			type = float,
+			default = 1,
+			help = 'Dynamical simulation time length in seconds. Default is 1.')
+
+# POINTS PER SECOND
+parser.add_argument(	'--pointspersecond', '-pps',
+			type = int,
+			default = 1000,
+			help = 'Number of points per second of the simulation plots. Default is 1000.')
 
 
 # Gathering arguments and options
@@ -180,6 +203,8 @@ cls = args.cls
 powerflow = args.powerflow
 estimatestate = args.estimatestate
 dyn = args.dynamicalfault
+tFinal = args.time
+pps = args.pointspersecond
 
 if clear:
 	clear()
@@ -201,6 +226,8 @@ def lineNumber(f):
 		else: breakFlag = False
 
 	return i
+
+print('\n' + '-'*50 + '\n READING FILES \n' + '-'*50)
 
 # (3.1) READING NETWORK FILE AND BUILDING TARGET SYSTEM DATA {{{2
 with open(networkFile,'r') as fileData:
@@ -226,7 +253,7 @@ with open(networkFile,'r') as fileData:
 
 	fileData.readline()	# Skip the '---' line		
 
-	# Getting number of buses nbus
+	# Getting number of buses nBus
 	startDataCardLineNumber = lineNumber(fileData)	# Store the line number of the start data card
 	startDataCardLinePointer = fileData.tell()	# Store the pointer to this line as it will be needed later
 	breakFlag = True
@@ -234,21 +261,23 @@ with open(networkFile,'r') as fileData:
 		line = readtabline(fileData)
 		if line[0] == '-999':			# Read lines until the -999 string is detected
 			endDataCardLineNumber = lineNumber(fileData)	# Store the line number of the end data card
-			nbus = endDataCardLineNumber - startDataCardLineNumber - 1	# Compute number of buses
+			nBus = endDataCardLineNumber - startDataCardLineNumber - 1	# Compute number of buses
 			breakFlag  = False
 
 	# Pre-allocating the matrixes
-	bsh = np.zeros((nbus,nbus))
-	gsh = np.zeros((nbus,nbus))
-	Pload = np.zeros(nbus)
-	Qload = np.zeros(nbus)
-	Pger = np.zeros(nbus)
-	Qger = np.zeros(nbus)
+	bsh = np.zeros((nBus,nBus))
+	gsh = np.zeros((nBus,nBus))
+	Pload = np.zeros(nBus)
+	Qload = np.zeros(nBus)
+	Pger = np.zeros(nBus)
+	Qger = np.zeros(nBus)
+	busName = [[] for i in range(nBus)]
 			
 	fileData.seek(startDataCardLinePointer)	# Go back to the start data card line
 
-	for i in range(nbus):
+	for i in range(nBus):
 		line = readtabline(fileData)
+		busName[i] = str(line[1])
 		Pload[i] = float(line[7])/Sb
 		Qload[i] = float(line[8])/Sb
 		Pger[i] = float(line[9])/Sb
@@ -282,14 +311,14 @@ with open(networkFile,'r') as fileData:
 	# (3.1.4) Acquiring branch data parameters
 	
 	# Initializing resistance and reactance matrixes
-	r = np.zeros((nbus,nbus))
-	x = np.zeros((nbus,nbus))
+	r = np.zeros((nBus,nBus))
+	x = np.zeros((nBus,nBus))
 
 	# Initializing tap levels matrix
-	a = np.ones((nbus,nbus))
+	a = np.ones((nBus,nBus))
 	
 	# Initializing connection matrix
-	K = [ [] for i in range(nbus)]
+	K = [ [] for i in range(nBus)]
 
 	fileData.seek(startDataCardLinePointer)	# Go back to the start data card line
 
@@ -316,17 +345,17 @@ with open(networkFile,'r') as fileData:
 	# (3.1.5) Building Y matrix
 	print(' Done.\n --> Building Y matrix... ',end='')
 	
-	z = array([[r[m,n] + 1j*x[m,n] for m in range(nbus)] for n in range(nbus)])
-	y = array([[1/z[m,n] if z[m,n] != 0 else 0 for m in range(nbus)] for n in range(nbus)])
+	z = array([[r[m,n] + 1j*x[m,n] for m in range(nBus)] for n in range(nBus)])
+	y = array([[1/z[m,n] if z[m,n] != 0 else 0 for m in range(nBus)] for n in range(nBus)])
 
 	g = real(copy(y))
 	b = imag(copy(y))
 
-	bsh = array([[ bsh[m,n]/2 if m!=n else bsh[m,n] for n in range(nbus)] for m in range(nbus)])
+	bsh = array([[ bsh[m,n]/2 if m!=n else bsh[m,n] for n in range(nBus)] for m in range(nBus)])
 
 	Y  = -a*transpose(a)*y
 
-	for k in range(nbus): Y[k,k] = 1j*bsh[k,k] + sum([a[k,m]**2*y[k,m] + 1j*bsh[k,m] for m in K[k]])
+	for k in range(nBus): Y[k,k] = 1j*bsh[k,k] + sum([a[k,m]**2*y[k,m] + 1j*bsh[k,m] for m in K[k]])
 
 	# (3.1.3) Searching for generator data start card
 	print(' Done.\n --> Beginning generator data reading... ',end='' )
@@ -359,6 +388,9 @@ with open(networkFile,'r') as fileData:
 		for k in range(16):
 			genData[i,k] = line[k]
 
+	genData[:,2] /= Sb
+	print(genData[:,2])
+
 	# (3.1.4) Searching for fault data start card
 	print(' Done.\n --> Beginning fault data reading... ',end='' )
 
@@ -381,14 +413,17 @@ with open(networkFile,'r') as fileData:
 			nFault = endDataCardLineNumber - startDataCardLineNumber - 1	# Compute number of faults
 			breakFlag  = False
 
-	faultData = np.zeros((nGen,5))
+	faultData = np.zeros((nFault,5))
 
 	fileData.seek(startDataCardLinePointer)	# Go back to the start data card line
 
 	for i in range(nFault):
 		line = readtabline(fileData)
-		for k in range(5):
-			faultData[i,k] = line[k]
+		faultData[i,0] = int(line[0])-1
+		faultData[i,1] = int(line[1])-1
+		faultData[i,2] = int(line[2])-1
+		faultData[i,3] = float(line[3])
+		faultData[i,4] = float(line[4])
 
 	print(' Done.')
 
@@ -408,9 +443,9 @@ with open(measurementsFile,'r') as fileData:
 	print(' --> Beginning active power measurements data reading... ',end='' )
 
 	fileData.readline()
-	isP = np.zeros((nbus,nbus),dtype=int)
-	wP = np.zeros((nbus,nbus))
-	P = np.zeros((nbus,nbus))
+	isP = np.zeros((nBus,nBus),dtype=int)
+	wP = np.zeros((nBus,nBus))
+	P = np.zeros((nBus,nBus))
 
 	# (3.2.2) Acquiring active power measures
 	breakFlag = True
@@ -433,8 +468,8 @@ with open(measurementsFile,'r') as fileData:
 		line = readtabline(fileData)
 		if line[0] == 'BEGGINING REACTIVE POWER MEASURES': breakFlag = False
 
-	wQ = np.zeros((nbus,nbus))
-	Q = np.zeros((nbus,nbus))
+	wQ = np.zeros((nBus,nBus))
+	Q = np.zeros((nBus,nBus))
 
 	fileData.readline()
 	breakFlag = True
@@ -459,9 +494,9 @@ with open(measurementsFile,'r') as fileData:
 		if line[0] == 'BEGGINING VOLTAGE MEASURES': breakFlag = False
 	fileData.readline()
 
-	isV = np.zeros(nbus,dtype=int)
-	wV = np.zeros(nbus)
-	Vm = np.zeros(nbus)
+	isV = np.zeros(nBus,dtype=int)
+	wV = np.zeros(nBus)
+	Vm = np.zeros(nBus)
 	breakFlag = True
 	line = readtabline(fileData)
 	while breakFlag == True:
@@ -486,10 +521,10 @@ with open(measurementsFile,'r') as fileData:
 
 		# Preallocating isPseudo with one row which will be deleted after
 		isPseudo = np.zeros((1,2))
-		pseudoP = np.zeros((nbus,nbus))
-		pseudoWP = np.zeros((nbus,nbus))
-		pseudoQ = np.zeros((nbus,nbus))
-		pseudoWQ = np.zeros((nbus,nbus))
+		pseudoP = np.zeros((nBus,nBus))
+		pseudoWP = np.zeros((nBus,nBus))
+		pseudoQ = np.zeros((nBus,nBus))
+		pseudoWQ = np.zeros((nBus,nBus))
 
 		breakFlag = True
 		while breakFlag == True:
@@ -525,18 +560,18 @@ if obs:
 	if verbose > 0: print('\n' + '-'*50 + '\n TESTING OBSERVABILITY \n' + '-'*50)
 	else: print('\n --> Beggining observability test.',end='')
 
-	obs = np.zeros((numP,nbus),dtype=float)
+	obs = np.zeros((numP,nBus),dtype=float)
 
 	i = 0
-	for m in range(nbus):
-		for n in range(nbus):
+	for m in range(nBus):
+		for n in range(nBus):
 			if isP[m,n]:
 				if m == n:
-					for k in range(nbus):
+					for k in range(nBus):
 						if k != m and k in K[m]: obs[i,k] = -1
 						elif k == m: obs[i,k] = len(K[m])
 				else:
-					for k in range(nbus):
+					for k in range(nBus):
 						if k==m: obs[i,k] = 1
 						if k==n: obs[i,k] = -1
 				i += 1
@@ -588,18 +623,18 @@ if obs:
 					addedPseudoNumber = 0
 
 				# Building new observability and gain matrices
-				obs = np.zeros((numP + addedPseudoNumber + 1,nbus))
+				obs = np.zeros((numP + addedPseudoNumber + 1,nBus))
 
 				i = 0
-				for m in range(nbus):
-					for n in range(nbus):
+				for m in range(nBus):
+					for n in range(nBus):
 						if tempIsP[m,n]:
 							if m == n:
-								for k in range(nbus):
+								for k in range(nBus):
 									if k != m and k in K[m]: obs[i,k] = -1
 									elif k == m: obs[i,k] = len(K[m])
 							else:
-								for k in range(nbus):
+								for k in range(nBus):
 									if k==m: obs[i,k] = 1
 									if k==n: obs[i,k] = -1
 							i += 1
@@ -654,26 +689,26 @@ if crit:
 	tempIsP = copy(isP)
 
 	# Sweeping through available measurements
-	for p in range(nbus):
-		for q in range(nbus):
+	for p in range(nBus):
+		for q in range(nBus):
 			if isP[p,q]:
 				if verbose > 0: print(' --> Removing measure ({0:3},{1:3})...'.format(p+1,q+1), end='')
 				# Temporarily removing measure (p,q)
 				tempIsP[p,q] = 0
 
 				# Building observability matrix again
-				obs = np.zeros((numP-1,nbus),dtype=float)
+				obs = np.zeros((numP-1,nBus),dtype=float)
 
 				i = 0
-				for m in range(nbus):
-					for n in range(nbus):
+				for m in range(nBus):
+					for n in range(nBus):
 						if tempIsP[m,n]:
 							if m == n:
-								for k in range(nbus):
+								for k in range(nBus):
 									if k != m and k in K[m]: obs[i,k] = -1
 									elif k == m: obs[i,k] = len(K[m])
 							else:
-								for k in range(nbus):
+								for k in range(nBus):
 									if k==m: obs[i,k] = 1
 									if k==n: obs[i,k] = -1
 							i += 1
@@ -720,18 +755,18 @@ if crit:
 # (3.5.1) CONSTRUCTING W MATRIX
 W = np.empty((2*numP + numV,1))			# Preallocating
 i = 0						# Starting counter
-for j in range(nbus):	
-	for n in range(nbus):
+for j in range(nBus):	
+	for n in range(nBus):
 		if isP[j,n]:
 			W[i] = 1/wP[j,n]**2
 			i+=1
-for j in range(nbus):	
-	for n in range(nbus):
+for j in range(nBus):	
+	for n in range(nBus):
 		if isP[j,n]:
 			W[i] = 1/wQ[j,n]**2
 			i += 1
 
-for j in range(nbus):	
+for j in range(nBus):	
 	if isV[j]:
 		W[i] = 1/wV[j]**2
 		i += 1
@@ -743,18 +778,18 @@ Zflat = Z(P,Q,isP,Vm,isV)
 
 if verbose > 1: 
 	pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
-	for j in range(nbus):	
-		for n in range(nbus):
+	for j in range(nBus):	
+		for n in range(nBus):
 			if isP[j,n]:
 				print('Z[{0:2.0f}] = P[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,P[j,n]))
 				i+=1
-	for j in range(nbus):	
-		for n in range(nbus):
+	for j in range(nBus):	
+		for n in range(nBus):
 			if isP[j,n]:
 				if verbose > 1: print('Z[{0:2.0f}] = Q[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,Q[j,n]))
 				i += 1
 
-	for j in range(nbus):	
+	for j in range(nBus):	
 		if isV[j]:
 			if verbose > 1: print('Z[{0:2.0f}] = V[{1:3}]     = {2:>10f}'.format(i+1,j+1,Vm[j]))
 			i += 1
@@ -771,8 +806,8 @@ if verbose > 1:
 # -------------------------------------------------
 if estimatestate:
 	# (5.1) Initial guess: flat start
-	V = np.ones(nbus)
-	theta = np.zeros(nbus)
+	V = np.ones(nBus)
+	theta = np.zeros(nBus)
 	H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
 
 	if verbose > 1:
@@ -837,15 +872,15 @@ if estimatestate:
 		dX = inv(U) @ transpose(H) @ W @ (Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))
 
 		# (6.6) Updating V and theta
-		theta[1:] += dX[0:nbus-1,0]
-		V += dX[nbus-1:,0]
+		theta[1:] += dX[0:nBus-1,0]
+		V += dX[nBus-1:,0]
 
 		# (6.7) Calculating jacobian gradient
 		grad = -transpose(H) @ W @ (Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))
 		
 		# (6.8) Printing iteration results
 		if verbose > 0:
-			print('\n --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}\n --> |grad(J)| = {3}'.format(norm(dX),transpose(dX[nbus-1:,0]),dX[0:nbus-1,0],transpose(norm(grad))))
+			print('\n --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}\n --> |grad(J)| = {3}'.format(norm(dX),transpose(dX[nBus-1:,0]),dX[0:nBus-1,0],transpose(norm(grad))))
 		if verbose > 1:
 			print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(Jac(V,theta,K,a,y,Y,bsh,isP,isV),(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))/norm(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)),norm(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))))
 
@@ -873,7 +908,7 @@ if estimatestate:
 	elapsed = time.time() - tstart
 
 	# (6.12) Calculating normalized residual
-	r = Z(P,Q,isP,np.zeros(nbus),isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)
+	r = Z(P,Q,isP,np.zeros(nBus),isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)
 	cov = inv(W) - H @ inv(U) @ transpose(H)
 	rn = array([ r[i]/sqrt(cov[i,i]) for i in range(len(r))])
 
@@ -883,16 +918,18 @@ if estimatestate:
 	if verbose > 1: print('\n --> Residual = \n{2}\n\n --> Normalized residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,rn,r))
 
 #--------------------------------------------------
-# (7) SETTING UP NUMERICAL METHOD FOR POWER FLOW {{{1
+# (9) SETTING UP NUMERICAL METHOD FOR POWER FLOW {{{1
 # -------------------------------------------------
 if powerflow or dyn:
+
+	print('\n' + '-'*50 + '\n POWER FLOW METHOD \n' + '-'*50)
 	# (5.1) Initial guess: flat start
-	V = .9*np.ones(nbus)
-	theta = np.zeros(nbus)
+	V = .9*np.ones(nBus)
+	theta = np.zeros(nBus)
 	P = np.diag(Pger - Pload)
 	Q = np.diag(Qger - Qload)
-	isP = np.eye(nbus)
-	isV = np.zeros(nbus)
+	isP = np.eye(nBus)
+	isV = np.zeros(nBus)
 
 	numP = int(isP.sum())
 	numV = int(isV.sum())
@@ -927,7 +964,7 @@ if powerflow or dyn:
 	tstart = time.time()
 
 	# -------------------------------------------------
-	# (8) STARTING NUMERICAL METHOD FOR POWER FLOW{{{1
+	# (10) STARTING NUMERICAL METHOD FOR POWER FLOW {{{1
 	# -------------------------------------------------
 
 	while(True):
@@ -948,19 +985,18 @@ if powerflow or dyn:
 		dX = inv(H) @ deltaSLC
 
 		# (6.6) Updating V and theta
-		theta[1:] += dX[0:nbus-1,0]
-		V += dX[nbus-1:,0]
+		theta[1:] += dX[0:nBus-1,0]
+		V += dX[nBus-1:,0]
 		
 		# (6.8) Printing iteration results
 		if verbose > 0:
-			print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[nbus-1:,0]),dX[0:nbus-1,0]))
+			print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[nBus-1:,0]),dX[0:nBus-1,0]))
 		if verbose > 1:
 			print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(Jac(V,theta,K,a,y,Y,bsh,isP,isV),(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))/norm(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)),norm(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))))
 
 		# (6.9) Testing for iteration sucess or divergence
 		if norm(dX) < absTol: # (6.8.1) If success
 			print('\n --> Sucess!')
-			print('\n' + '-'*50 + '\n POWER FLOW CONVERGENCE RESULTS \n' + '-'*50)
 			print('\n --> Numerical method stopped at iteration {1} with |deltaX| = {0}.'.format(norm(dX),itCount))
 			break	
 
@@ -986,22 +1022,120 @@ if powerflow or dyn:
 	if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
 
 # -------------------------------------------------
-# (8) STARTING NUMERICAL METHOD FOR DYNAMICAL SIMULATION {{{1
+# (11) STARTING NUMERICAL METHOD FOR DYNAMICAL SIMULATION {{{1
 # -------------------------------------------------
 if dyn:
-
-	Yload = [(Pload[i] - 1j*Qload[i])/V[i]**2 for i in range(nbus)]
+	print('\n' + '-'*50 + '\n DYNAMIC FAULT SIMULATION \n' + '-'*50)
+	print('\n --> Setting up dynamical simulation...',end='')
+	YLoad = [(Pload[i] - 1j*Qload[i])/V[i]**2 for i in range(nBus)]
 	
-	# Permutating the Y matrix
+	# Permutating the Y and K matrixes. Explanation: the Y matrix built before did not consider which bars were generators and which are not. Nevertheless, to build the Y_RED matrix, the generator buses must be the first n. This means that we must obtain a new Y matrix wherein the first n columns are the genertor buses.
 
-	P = np.eye(nbars)
+	P = np.eye(nBus)
 
-	for i in range(nbars)
-		for k in range(nGen)
-			if genData[0] == i
+	for i in range(nBus):
+		for k in range(nGen):
+			if genData[k,0]-1 == i:
 				P[[i,k]] = P[[k,i]]
+				temp = K[k]
+				K[k] = K[i]
+				K[i] = temp
 				break
 
+	# Remember that we need to permute both columns and rows. To permute rows, it is needed to left-multiply Y by P (PY) and to columns swap, right-multiply (YP).
+	
+	YDyn = P@Y@P
+	YLoadDyn = P@YLoad
+	VDyn,thetaDyn = P@V, P@theta
 
-	P
-			
+	Yred,C,D = mF.reduceGrid(YDyn,YLoadDyn,VDyn,genData)
+	
+	# Pre-fault mechanical power
+	pm = np.zeros(nGen)
+	for i in range(nGen):
+		pm[i] = V[i]**2*real(Yred[i,i]) + sum( [ (C[i,j]*sin(theta[i] - theta[j]) + D[i,j]*cos(theta[i] - theta[j])) for j in range(nGen)])
+
+	# Calculating mid-fault system
+	fig = [ [] for i in range(nFault)]
+
+	for q in range(nFault):
+
+		lineImp = Y[int(faultData[q,1]),int(faultData[q,2])]
+
+		Yfault = copy(Y)
+		YLoadFault = copy(YLoad)
+
+		Yfault[int(faultData[q,1]),int(faultData[q,2])] = 0
+		Yfault[int(faultData[q,2]),int(faultData[q,1])] = 0
+
+		YDynFault = P@Yfault@P
+		YLoadDynFault = P@YLoadFault
+		VDynFault,thetaDynFault = P@V, P@theta
+
+		YLoadFault[int(faultData[q,1])] += faultData[q,3]*lineImp
+		YLoadFault[int(faultData[q,2])] += (1-faultData[q,3])*lineImp
+
+		YredFault,CFault,DFault = mF.reduceGrid(YDynFault,YLoadDynFault,VDynFault,genData)
+
+		print('Done. \n --> Starting numerical simulation of fault {0}...'.format(int(faultData[q,0])),end='')
+
+
+		tFault = np.linspace(0,faultData[q,4],int(round(pps*(faultData[q,4]))),endpoint=True)
+		y0 = np.zeros(2*nGen)
+
+		for i in range(nGen): y0[2*i] = theta[i]
+
+		solFault = odeint(mF.odeFault,y0,tFault,args=(CFault,DFault,YredFault,VDyn,pm,genData))
+
+		# Calculating post-fault system
+
+		YPost = copy(YDyn)
+		YLoadPost = copy(YLoadDyn)
+
+		YPost[int(faultData[q,1]),int(faultData[q,2])] = 0
+		YPost[int(faultData[q,2]),int(faultData[q,1])] = 0
+
+		YDynPost = P@Yfault@P
+		YLoadDynPost = P@YLoadPost
+
+		YredPost,CPost,DPost = mF.reduceGrid(YDynPost,YLoadDynPost,VDyn,genData)
+
+		tPost = np.linspace(faultData[q,4],tFinal,int(round(pps*(tFinal - faultData[q,4]))),endpoint=True)
+		solPost = odeint(mF.odeFault,solFault[-1,:],tPost,args=(CPost,DPost,YredPost,VDyn,pm,genData))
+
+		print('Done. \n')
+
+		# Plotting results
+
+		sol = conc((solFault,solPost),axis=0)
+		t = conc((tFault,tPost),axis=0)
+
+		fig[q] = pyplt.figure()
+		ax1 = fig[q].add_subplot(2,1,1)
+		ax2 = fig[q].add_subplot(2,1,2)
+
+		for i in range(nGen):
+			ax2.plot(t,sol[:, 2*i])
+			ax1.plot(t,sol[:, 2*i+1],label=busName[i])
+
+		ax1.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F = {0}$'.format(faultData[q,4]))
+		ax2.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F = {0}$'.format(faultData[q,4]))
+		ax1.legend(loc="lower right")
+
+
+		ax1.set_ylabel(r'Angular speed $\left(\sfrac{rad}{s}\right)$')
+		ax2.set_ylabel(r'Power angle $\left(rad\right)$')
+		ax1.grid(which='major',axis='both')
+		ax1.grid(which='major',axis='both')
+
+		ax1.grid(which='major',axis='both')
+		ax2.grid(which='major',axis='both')
+
+		fig[q].suptitle(r'Fault {0} results'.format(int(faultData[q,0])+1))
+		ax2.set_xlabel('Time (s)')
+
+
+
+print(' --> Plotting results.')
+pyplt.legend()
+pyplt.show()
