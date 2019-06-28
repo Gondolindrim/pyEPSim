@@ -64,7 +64,7 @@ GENERATOR DATA COLUMNS:
 
 01 Bus number (I).
 02 Rated power (MVA)
-03 Inertia constant
+03 Inertia constant H (in MW)
 04 Damping constant
 05 Armature resistance r_a (pu)
 06 Leakage reactance x_L (pu)

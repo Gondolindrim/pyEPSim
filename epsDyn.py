@@ -388,9 +388,7 @@ with open(networkFile,'r') as fileData:
 		for k in range(16):
 			genData[i,k] = line[k]
 
-	genData[:,2] /= Sb
-	print(genData[:,2])
-
+	genData[:,2] /= Sb	
 	# (3.1.4) Searching for fault data start card
 	print(' Done.\n --> Beginning fault data reading... ',end='' )
 
@@ -1031,61 +1029,81 @@ if dyn:
 	
 	# Permutating the Y and K matrixes. Explanation: the Y matrix built before did not consider which bars were generators and which are not. Nevertheless, to build the Y_RED matrix, the generator buses must be the first n. This means that we must obtain a new Y matrix wherein the first n columns are the genertor buses.
 
-	P = np.eye(nBus)
+	PDyn = np.eye(nBus)
 
-	for i in range(nBus):
+	def isGen(busN,genData):
+		flag = False
 		for k in range(nGen):
-			if genData[k,0]-1 == i:
-				P[[i,k]] = P[[k,i]]
-				temp = K[k]
-				K[k] = K[i]
-				K[i] = temp
+			if genData[k,0]-1 == busN:
+				flag = True
+				break
+
+		return flag
+		
+	genDataDyn = copy(genData)
+	busNameDyn = copy(busName)
+	for i in range(nGen):
+		for k in range(int(genDataDyn[i,0])):
+			if not isGen(k,genDataDyn):
+				temp = copy(PDyn[int(genDataDyn[i,0]-1)])
+				PDyn[int(genDataDyn[i,0]-1)] = copy(PDyn[k])
+				PDyn[k] = temp
+				genDataDyn[i,0] = k+1
 				break
 
 	# Remember that we need to permute both columns and rows. To permute rows, it is needed to left-multiply Y by P (PY) and to columns swap, right-multiply (YP).
-	
-	YDyn = P@Y@P
-	YLoadDyn = P@YLoad
-	VDyn,thetaDyn = P@V, P@theta
+	YDyn = PDyn@Y@PDyn
+	YLoadDyn = PDyn@YLoad
+	VDyn,thetaDyn = PDyn@V, PDyn@theta
 
 	Yred,C,D = mF.reduceGrid(YDyn,YLoadDyn,VDyn,genData)
+
 	
 	# Pre-fault mechanical power
 	pm = np.zeros(nGen)
 	for i in range(nGen):
-		pm[i] = V[i]**2*real(Yred[i,i]) + sum( [ (C[i,j]*sin(theta[i] - theta[j]) + D[i,j]*cos(theta[i] - theta[j])) for j in range(nGen)])
+		pm[i] = (VDyn[i]**2)*real(Yred[i,i]) + sum( [ (C[i,j]*sin(thetaDyn[i] - thetaDyn[j]) + D[i,j]*cos(thetaDyn[i] - thetaDyn[j])) for j in range(nGen)])
 
-	# Calculating mid-fault system
 	fig = [ [] for i in range(nFault)]
 
 	for q in range(nFault):
 
-		lineImp = Y[int(faultData[q,1]),int(faultData[q,2])]
+		faultData[q,4] /= 1000
 
-		Yfault = copy(Y)
+		lineAdmittance = Y[int(faultData[q,1]),int(faultData[q,2])] 
+
+		YFault = copy(Y)
 		YLoadFault = copy(YLoad)
+	
+		YFault[int(faultData[q,1]),int(faultData[q,2])] = 0
+		YFault[int(faultData[q,2]),int(faultData[q,1])] = 0
 
-		Yfault[int(faultData[q,1]),int(faultData[q,2])] = 0
-		Yfault[int(faultData[q,2]),int(faultData[q,1])] = 0
+		if int(faultData[q,3]) == 0:
+			YLoadFault[int(faultData[q,1])] += lineAdmittance*1e3
+			YLoadFault[int(faultData[q,2])] += lineAdmittance
+		elif int(faultData[q,3]) == 1:
+			YLoadFault[int(faultData[q,1])] += lineAdmittance
+			YLoadFault[int(faultData[q,2])] += lineAdmittance*1e3
+		else:
+			YLoadFault[int(faultData[q,1])] += lineAdmittance/faultData[q,3]
+			YLoadFault[int(faultData[q,2])] += lineAdmittance/(1-faultData[q,3])
+		YDynFault = PDyn@YFault@PDyn
+		YLoadDynFault = PDyn@YLoadFault
+		VDynFault,thetaDynFault = PDyn@V, PDyn@theta
 
-		YDynFault = P@Yfault@P
-		YLoadDynFault = P@YLoadFault
-		VDynFault,thetaDynFault = P@V, P@theta
+		YredFault,CFault,DFault = mF.reduceGrid(YDynFault,YLoadDynFault,VDynFault,genDataDyn)
 
-		YLoadFault[int(faultData[q,1])] += faultData[q,3]*lineImp
-		YLoadFault[int(faultData[q,2])] += (1-faultData[q,3])*lineImp
-
-		YredFault,CFault,DFault = mF.reduceGrid(YDynFault,YLoadDynFault,VDynFault,genData)
-
-		print('Done. \n --> Starting numerical simulation of fault {0}...'.format(int(faultData[q,0])),end='')
+		print('Done. \n --> Starting numerical simulation of fault {0}...'.format(int(faultData[q,0] + 1)),end='')
 
 
 		tFault = np.linspace(0,faultData[q,4],int(round(pps*(faultData[q,4]))),endpoint=True)
 		y0 = np.zeros(2*nGen)
 
-		for i in range(nGen): y0[2*i] = theta[i]
+		for i in range(nGen): y0[2*i] = thetaDyn[i]
 
-		solFault = odeint(mF.odeFault,y0,tFault,args=(CFault,DFault,YredFault,VDyn,pm,genData))
+	#	print('\n --> y0 = {0}'.format(y0))
+		#print('\n --> Initial ODE: {0}'.format(mF.odeFault1(y0,0,C,D,Yred,VDyn,pm,genDataDyn)))
+		solFault = odeint(mF.odeFault1,y0,tFault,args=(CFault,DFault,YredFault,VDyn,pm,genDataDyn))
 
 		# Calculating post-fault system
 
@@ -1095,13 +1113,13 @@ if dyn:
 		YPost[int(faultData[q,1]),int(faultData[q,2])] = 0
 		YPost[int(faultData[q,2]),int(faultData[q,1])] = 0
 
-		YDynPost = P@Yfault@P
-		YLoadDynPost = P@YLoadPost
+		YDynPost = PDyn@YFault@PDyn
+		YLoadDynPost = PDyn@YLoadPost
 
-		YredPost,CPost,DPost = mF.reduceGrid(YDynPost,YLoadDynPost,VDyn,genData)
+		YredPost,CPost,DPost = mF.reduceGrid(YDynPost,YLoadDynPost,VDyn,genDataDyn)
 
 		tPost = np.linspace(faultData[q,4],tFinal,int(round(pps*(tFinal - faultData[q,4]))),endpoint=True)
-		solPost = odeint(mF.odeFault,solFault[-1,:],tPost,args=(CPost,DPost,YredPost,VDyn,pm,genData))
+		solPost = odeint(mF.odeFault1,solFault[-1,:],tPost,args=(CPost,DPost,YredPost,VDyn,pm,genDataDyn))
 
 		print('Done. \n')
 
@@ -1116,14 +1134,13 @@ if dyn:
 
 		for i in range(nGen):
 			ax2.plot(t,sol[:, 2*i])
-			ax1.plot(t,sol[:, 2*i+1],label=busName[i])
+			ax1.plot(t,sol[:, 2*i+1]-sol[:, 1],label=busName[int(genData[i,0])-1])
 
-		ax1.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F = {0}$'.format(faultData[q,4]))
-		ax2.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F = {0}$'.format(faultData[q,4]))
+		ax1.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F$'.format(faultData[q,4]))
+		ax2.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F$'.format(faultData[q,4]))
 		ax1.legend(loc="lower right")
 
-
-		ax1.set_ylabel(r'Angular speed $\left(\sfrac{rad}{s}\right)$')
+		ax1.set_ylabel(r'Synchronized angular speed $\left(\sfrac{rad}{s}\right)$')
 		ax2.set_ylabel(r'Power angle $\left(rad\right)$')
 		ax1.grid(which='major',axis='both')
 		ax1.grid(which='major',axis='both')
@@ -1131,10 +1148,8 @@ if dyn:
 		ax1.grid(which='major',axis='both')
 		ax2.grid(which='major',axis='both')
 
-		fig[q].suptitle(r'Fault {0} results'.format(int(faultData[q,0])+1))
+		fig[q].suptitle(r'Fault {0} results. Description: short-circuit at line connecting buses {1} and {2}, at position {3}, with open time {4} ms'.format(int(faultData[q,0])+1, int(faultData[q,1]+1), int(faultData[q,2]+1), faultData[q,3], 1000*faultData[q,4]))
 		ax2.set_xlabel('Time (s)')
-
-
 
 print(' --> Plotting results.')
 pyplt.legend()

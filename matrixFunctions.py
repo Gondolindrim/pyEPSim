@@ -15,7 +15,7 @@ pi = np.pi
 from copy import deepcopy
 copy = deepcopy
 
-def dPdT(V,theta,K,a,y,Y,bsh,isP): #{{{2
+def dPdT(V,theta,K,a,y,Y,bsh,isP): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
@@ -47,7 +47,7 @@ def dPdT(V,theta,K,a,y,Y,bsh,isP): #{{{2
 	H = np.delete(H,0,axis=1)
 	return H
 
-def dPdV(V,theta,K,a,y,Y,bsh,isP):#{{{2
+def dPdV(V,theta,K,a,y,Y,bsh,isP):#{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
@@ -75,7 +75,7 @@ def dPdV(V,theta,K,a,y,Y,bsh,isP):#{{{2
 				i+=1
 	return N
 
-def dQdT(V,theta,K,a,y,Y,bsh,isP): #{{{2
+def dQdT(V,theta,K,a,y,Y,bsh,isP): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
@@ -105,7 +105,7 @@ def dQdT(V,theta,K,a,y,Y,bsh,isP): #{{{2
 	M = np.delete(M,0,axis=1)
 	return M
 
-def dQdV(V,theta,K,a,y,Y,bsh,isP): #{{{2
+def dQdV(V,theta,K,a,y,Y,bsh,isP): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
@@ -131,7 +131,7 @@ def dQdV(V,theta,K,a,y,Y,bsh,isP): #{{{2
 				i += 1
 	return L
 
-def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{2
+def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
@@ -166,7 +166,7 @@ def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{2
 			i += 1
 	return h
 
-def Z(P,Q,isP,V,isV): #{{{2
+def Z(P,Q,isP,V,isV): #{{{1
 	numP = int(isP.sum())
 	numV = int(isV.sum())
 	nbus = int(len(V))
@@ -190,7 +190,7 @@ def Z(P,Q,isP,V,isV): #{{{2
 
 	return Z
 
-def Jac(V,theta,K,a,y,Y,bsh,isP,isV): #{{{2
+def Jac(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 
 	nbus = len(isP)
 	numP = isP.sum()
@@ -212,7 +212,7 @@ def Jac(V,theta,K,a,y,Y,bsh,isP,isV): #{{{2
 	
 	return conc((dPdQ,O),axis=0)
 
-def reduceGrid(Y,Yload,V,genData): #{{{2
+def reduceGrid(Y,Yload,V,genData): #{{{1
 	nGen = genData.shape[0]
 	nBus = Y.shape[0]
 
@@ -227,7 +227,7 @@ def reduceGrid(Y,Yload,V,genData): #{{{2
 
 	Yll = np.diag(Yload[nGen:nBus])
 
-	Ytrans = np.array([1/(data[4] + 1j*data[7]) for data in genData]) # Y' no livro
+	Ytrans = np.array([1/(data[4] + 1j*data[12]) for data in genData]) # Y' no livro
 	Ytrans = np.diag(Ytrans)
 	
 	YA = Ytrans
@@ -247,20 +247,27 @@ def reduceGrid(Y,Yload,V,genData): #{{{2
 
 	C = np.zeros((nGen,nGen))
 	D = np.zeros((nGen,nGen))
-	
-	for i in range(nGen):
-		for j in range(nGen):
-			if j != i:
-				C[i,j] += V[i]*V[j]*imag(Yred[i,j])
-				D[i,j] += V[i]*V[j]*real(Yred[i,j])
+
+	C = np.array([ [ V[i]*V[j]*imag(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
+	D = np.array([ [ V[i]*V[j]*real(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
+
 
 	return [Yred,C,D]
 
-def odeFault(x,t,C,D,Yred,V,pm,genData):
+def odeFault1(x,t,C,D,Yred,V,pm,genData): #{{{1
 	nGen = genData.shape[0]
 	F = np.zeros(2*nGen)
 	for k in range(nGen):
 		F[2*k] = x[2*k+1]	# delta} = x[k]
-		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)])  )/(2*genData[k,2]) - genData[k,3]*x[2*k+1]/(2*genData[k,2])	# omega = x[k+1]
+		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)]) - genData[k,3]*x[2*k+1] )/(2*genData[k,2])	# omega = x[k+1]
+
+	return F
+
+def odeFault2(x,t,C,D,Yred,V,pm,genData): #{{{1
+	nGen = genData.shape[0]
+	F = np.zeros(2*nGen)
+	for k in range(nGen):
+		F[2*k] = x[2*k+1]	# delta} = x[k]
+		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)]) )/(2*genData[k,2])	# omega = x[k+1]
 
 	return F
