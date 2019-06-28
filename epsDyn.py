@@ -58,6 +58,8 @@ Jac = mF.Jac
 h = mF.h
 Z = mF.Z
 
+import linecache as lc
+
 # -------------------------------------------------
 # (2) CUSTOM FUNCTIONS AND ARGUMENTS{{{1
 # -------------------------------------------------
@@ -132,8 +134,8 @@ parser.add_argument(	'--cls',
 # TOL option
 parser.add_argument(	'--tol',
 			type=float,
-			default = 1e-4,
-			help = 'Newton-Raphson numerical method tolerance. Default is 1e-4.')
+			default = 1e-6,
+			help = 'Newton-Raphson numerical method tolerance. Default is 1e-6.')
 
 # MAXITER option
 parser.add_argument(	'--maxiter',
@@ -159,6 +161,12 @@ parser.add_argument(	'--estimatestate', '-se',
 			action = 'store_true',
 			help = 'Perform State Estimation of the Target Sysem.')
 
+# DYNAMICAL FAULT SIMULATION
+parser.add_argument(	'--dynamicalfault', '-dyn',
+			default = False,
+			action = 'store_true',
+			help = 'Perform dynamical simulation of the faults in the system. These faults should be listed in the MEAS file.')
+
 
 # Gathering arguments and options
 args = parser.parse_args()
@@ -171,6 +179,7 @@ crit = args.crit
 cls = args.cls
 powerflow = args.powerflow
 estimatestate = args.estimatestate
+dyn = args.dynamicalfault
 
 if clear:
 	clear()
@@ -179,6 +188,19 @@ if clear:
 # -------------------------------------------------
 # (3) DESCRIBRING SYSTEM: READING FILE {{{1
 # -------------------------------------------------
+
+def lineNumber(f):
+	i = 0
+	pointer = f.tell()
+	breakFlag = True
+	f.seek(0)
+	while breakFlag == True:
+		line = f.readline()
+		pointerTemp = f.tell()
+		if pointerTemp != pointer: i += 1
+		else: breakFlag = False
+
+	return i
 
 # (3.1) READING NETWORK FILE AND BUILDING TARGET SYSTEM DATA {{{2
 with open(networkFile,'r') as fileData:
@@ -200,33 +222,40 @@ with open(networkFile,'r') as fileData:
 	while breakFlag==True:
 		line = readtabline(fileData)
 		if line[0] == 'BUS DATA FOLLOWS':
-			nbus = int(line[1])	# Extracting number of buses in system
 			breakFlag = False
 
+	fileData.readline()	# Skip the '---' line		
+
+	# Getting number of buses nbus
+	startDataCardLineNumber = lineNumber(fileData)	# Store the line number of the start data card
+	startDataCardLinePointer = fileData.tell()	# Store the pointer to this line as it will be needed later
+	breakFlag = True
+	while breakFlag == True:
+		line = readtabline(fileData)
+		if line[0] == '-999':			# Read lines until the -999 string is detected
+			endDataCardLineNumber = lineNumber(fileData)	# Store the line number of the end data card
+			nbus = endDataCardLineNumber - startDataCardLineNumber - 1	# Compute number of buses
+			breakFlag  = False
+
+	# Pre-allocating the matrixes
 	bsh = np.zeros((nbus,nbus))
 	gsh = np.zeros((nbus,nbus))
 	Pload = np.zeros(nbus)
 	Qload = np.zeros(nbus)
 	Pger = np.zeros(nbus)
 	Qger = np.zeros(nbus)
+			
+	fileData.seek(startDataCardLinePointer)	# Go back to the start data card line
 
-	breakFlag = True
-	i = 0
-
-	fileData.readline()	# Skip the '---' line		
-	line = readtabline(fileData)
-
-	while breakFlag == True:
+	for i in range(nbus):
+		line = readtabline(fileData)
 		Pload[i] = float(line[7])/Sb
 		Qload[i] = float(line[8])/Sb
 		Pger[i] = float(line[9])/Sb
 		Qger[i] = float(line[10])/Sb
 		gsh[i,i] = float(line[15])
 		bsh[i,i] = float(line[16])
-		i += 1
 
-		line = readtabline(fileData)
-		if line[0] == '-999': breakFlag  = False
 
 	# (3.1.3) Searching for branch data start card
 	print(' Done.\n --> Beginning branch data reading... ',end='' )
@@ -237,9 +266,21 @@ with open(networkFile,'r') as fileData:
 		if line[0] == 'BRANCH DATA FOLLOWS':
 			breakFlag = False
 
+	fileData.readline()	# Skip the '---' line	
+
+	# Getting number of branches nBranch
+	startDataCardLineNumber = lineNumber(fileData)	# Store the line number of the start data card
+	startDataCardLinePointer = fileData.tell()	# Store the pointer to this line as it will be needed later
+	breakFlag = True
+	while breakFlag == True:
+		line = readtabline(fileData)
+		if line[0] == '-999':			# Read lines until the -999 string is detected
+			endDataCardLineNumber = lineNumber(fileData)	# Store the line number of the end data card
+			nBranch = endDataCardLineNumber - startDataCardLineNumber - 1	# Compute number of buses
+			breakFlag  = False
+
 	# (3.1.4) Acquiring branch data parameters
 	
-	fileData.readline()	# Skip the '---' line
 	# Initializing resistance and reactance matrixes
 	r = np.zeros((nbus,nbus))
 	x = np.zeros((nbus,nbus))
@@ -250,10 +291,10 @@ with open(networkFile,'r') as fileData:
 	# Initializing connection matrix
 	K = [ [] for i in range(nbus)]
 
-	breakFlag = True
-	i = 0
-	line = readtabline(fileData)
-	while breakFlag == True:
+	fileData.seek(startDataCardLinePointer)	# Go back to the start data card line
+
+	for i in range(nBranch):
+		line = readtabline(fileData)
 		fromBus = int(line[0])
 		toBus = int(line[1])
 
@@ -272,12 +313,6 @@ with open(networkFile,'r') as fileData:
 		if float(line[14]) != 0:
 			a[fromBus-1,toBus-1] = 1/float(line[14])
 
-		i += 1
-
-		line = readtabline(fileData)
-		if line[0] == '-999':
-			breakFlag  = False
-
 	# (3.1.5) Building Y matrix
 	print(' Done.\n --> Building Y matrix... ',end='')
 	
@@ -292,7 +327,70 @@ with open(networkFile,'r') as fileData:
 	Y  = -a*transpose(a)*y
 
 	for k in range(nbus): Y[k,k] = 1j*bsh[k,k] + sum([a[k,m]**2*y[k,m] + 1j*bsh[k,m] for m in K[k]])
-	print(' Done.' )
+
+	# (3.1.3) Searching for generator data start card
+	print(' Done.\n --> Beginning generator data reading... ',end='' )
+
+	breakFlag = True
+	while breakFlag==True:
+		line = readtabline(fileData)
+		if line[0] == 'GENERATOR DATA FOLLOWS':
+			breakFlag = False
+
+	fileData.readline()	# Skip the '---' line	
+
+	# Getting number of branches nBranch
+	startDataCardLineNumber = lineNumber(fileData)	# Store the line number of the start data card
+	startDataCardLinePointer = fileData.tell()	# Store the pointer to this line as it will be needed later
+	breakFlag = True
+	while breakFlag == True:
+		line = readtabline(fileData)
+		if line[0] == '-999':			# Read lines until the -999 string is detected
+			endDataCardLineNumber = lineNumber(fileData)	# Store the line number of the end data card
+			nGen = endDataCardLineNumber - startDataCardLineNumber - 1	# Compute number of buses
+			breakFlag  = False
+
+	genData = np.zeros((nGen,16))
+
+	fileData.seek(startDataCardLinePointer)	# Go back to the start data card line
+
+	for i in range(nGen):
+		line = readtabline(fileData)
+		for k in range(16):
+			genData[i,k] = line[k]
+
+	# (3.1.4) Searching for fault data start card
+	print(' Done.\n --> Beginning fault data reading... ',end='' )
+
+	breakFlag = True
+	while breakFlag==True:
+		line = readtabline(fileData)
+		if line[0] == 'FAULT DATA FOLLOWS':
+			breakFlag = False
+
+	fileData.readline()	# Skip the '---' line	
+
+	# Getting number of branches nBranch
+	startDataCardLineNumber = lineNumber(fileData)	# Store the line number of the start data card
+	startDataCardLinePointer = fileData.tell()	# Store the pointer to this line as it will be needed later
+	breakFlag = True
+	while breakFlag == True:
+		line = readtabline(fileData)
+		if line[0] == '-999':			# Read lines until the -999 string is detected
+			endDataCardLineNumber = lineNumber(fileData)	# Store the line number of the end data card
+			nFault = endDataCardLineNumber - startDataCardLineNumber - 1	# Compute number of faults
+			breakFlag  = False
+
+	faultData = np.zeros((nGen,5))
+
+	fileData.seek(startDataCardLinePointer)	# Go back to the start data card line
+
+	for i in range(nFault):
+		line = readtabline(fileData)
+		for k in range(5):
+			faultData[i,k] = line[k]
+
+	print(' Done.')
 
 
 # END OF FILE MANIPULATION: CLOSING FILE --------
@@ -788,11 +886,11 @@ if estimatestate:
 #--------------------------------------------------
 # (7) SETTING UP NUMERICAL METHOD FOR POWER FLOW {{{1
 # -------------------------------------------------
-if powerflow:
+if powerflow or dyn:
 	# (5.1) Initial guess: flat start
 	V = .9*np.ones(nbus)
 	theta = np.zeros(nbus)
-	P = np.diag(Pger-Pload)
+	P = np.diag(Pger - Pload)
 	Q = np.diag(Qger - Qload)
 	isP = np.eye(nbus)
 	isV = np.zeros(nbus)
@@ -844,8 +942,7 @@ if powerflow:
 		
 		# (6.3) Calculating jacobian
 		H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
-		H = np.delete(H,0,axis=0) # Deleting non-V measures
-	#	print(H.shape)
+		H = np.delete(H,0,axis=0) # Removing slack bar angle derivatives for it is known
 
 		# (6.5) Calculating state update
 		deltaSLC = np.delete(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV),0,axis=0)
@@ -888,3 +985,9 @@ if powerflow:
 	print(' --> Final result:\n\n	theta = {0} \n\n	V     = {1}'.format(theta,V))
 
 	if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
+
+if dyn:
+
+	Yload = [(Pload[i] - 1j*Qload[i])/V[i]**2 for i in range(nbus)]
+
+	print(Yload)

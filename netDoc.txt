@@ -1,0 +1,92 @@
+Columns are separated by TAB character.
+
+-------------------------------------------------
+BUS DATA COLUMNS:
+
+01 Bus number (I) *
+02 Name (A)*
+03 Load flow area number (I) Don't use zero!
+04 Loss zone number (I)
+05 Type (I) *
+	0 - Unregulated (load, PQ)
+	1 - Hold MVAR generation within voltage limits, (PQ)
+	2 - Hold voltage within VAR limits (gen, PV)
+	3 - Hold voltage and angle (swing, V-Theta) (must always have one)
+06 Final voltage, p.u. (F) *
+07 Final angle, degrees (F) *
+08 Load MW (F) *
+09 Load MVAR (F) *
+10 Generation MW (F) *
+11 Generation MVAR (F) *
+12 Base KV (F)
+13 Desired volts (pu) (F) (This is desired remote voltage if this bus is controlling another bus.
+14 Maximum MVAR or voltage limit (F)
+15 Minimum MVAR or voltage limit (F)
+16 Shunt conductance G (per unit) (F) *
+17 Shunt susceptance B (per unit) (F) *
+18 Remote controlled bus number
+
+-------------------------------------------------
+BRANCH DATA COLUMNS
+
+01 Tap bus number (I). For transformers or phase shifters, the side of the model the non-unity tap is on 
+02 Z bus number (I).  For transformers and phase shifters, the side of the model the device impedance is on.
+03 Load flow area (I)
+04 Loss zone (I)
+05 Circuit (I) * (Use 1 for single lines)
+06 Type (I) *
+	0 - Transmission line
+	1 - Fixed tap
+	2 - Variable tap for voltage control (TCUL, LTC)
+	3 - Variable tap (turns ratio) for MVAR control
+	4 - Variable phase angle for MW control (phase shifter)
+07 Branch resistance R, per unit (F) *
+08 Branch reactance X, per unit (F) * No zero impedance lines
+09 Line charging B, per unit (F) * (total line charging, +B)
+10 Line MVA rating No 1 (I) Left justify!
+11 Line MVA rating No 2 (I) Left justify!
+12 Line MVA rating No 3 (I) Left justify!
+13 Control bus number
+14 Side (I)
+	0 - Controlled bus is one of the terminals
+	1 - Controlled bus is near the tap side
+	2 - Controlled bus is near the impedance side (Z bus)
+15 Transformer final turns ratio (F)
+16 Transformer (phase shifter) final angle (F)
+17 Minimum tap or phase shift (F)
+18 Maximum tap or phase shift (F)
+19 Step size (F)
+20 Minimum voltage, MVAR or MW limit (F)
+21 Maximum voltage, MVAR or MW limit (F)
+
+-------------------------------------------------
+GENERATOR DATA COLUMNS:
+
+01 Bus number (I).
+02 Rated power (MVA)
+03 Inertia constant
+04 Damping constant
+05 Armature resistance r_a (pu)
+06 Leakage reactance x_L (pu)
+07 Direct axis quadrature reactance x_d (pu)
+08 Direct axis transient reactance x'_d (pu)
+09 Direct axis subtransient reactance x''_d (pu)
+10 Direct axis rotor transient magnetization time constant T'_do
+11 Direct axis rotor subtransient magnetization time constant T''_do
+12 Quadrature axis quadrature reactance x_q (pu)
+13 Quadrature axis transient reactance x'_q (pu)
+14 Quadrature axis subtransient reactance x''_q (pu)
+15 Quadrature axis rotor transient magnetization time constant T'_qo
+16 Quadrature axis rotor subtransient magnetization time constant T''_qo
+Data taken from Kodsi, Sameh K.M. and Canizares, Claudio A. Modelling and Simulation of IEEE 14 Bus System With FACTs Controllers. Technical report, 2003. Available at <https://www.researchgate.net/profile/Mohamed_Mourad_Lafifi/post/Datasheet_for_5_machine_14_bus_ieee_system2/attachment/59d637fe79197b8077995408/AS%3A395594351824896%401471328451959/download/MODELING+AND+SIMULATION+OF+IEEE+14+BUS+SYSTEM+WITH+FACTS+CONTROLLERS+IEEEBenchmarkTFreport.pdf> (accessed jun 27, 2019).
+
+-------------------------------------------------
+FAULT DATA COLUMNS
+
+1: Fault number (I)
+2: "From" bus (I)
+3: "To" bus (I)
+4: Short circuit location, given by a number between 0 and 1. In the case of a short-circuit,
+	the line impedance ZL is divided in two parts: one connecting to the "from" bus with magnitude a*ZL and
+	the other connected to the "to" bus with magnitude (1-a)*ZL.
+5: Opening time. Time in seconds that the relay will remain open before the line is removed.
