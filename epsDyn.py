@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # -------------------------------------------------
 # UNIVERSITY OF SAO PAULO
 # SÃO CARLOS SCHOOL OF ENGINEERING (EESC)
@@ -63,30 +64,19 @@ parser = argparse.ArgumentParser(
 	description = 'Power flow calculator that takes a system data in the IEEE CDF and a measurements file in the LACO CDF.',
 	)
 
-# (1.7) Jacobian matrix functions
+# (1.7) mF.Jacobian matrix functions
 import matrixFunctions as mF
-Jac = mF.Jac
-h = mF.h
-Z = mF.Z
 
-import linecache as lc
+#import linecache as lc
 
 # -------------------------------------------------
 # (2) CUSTOM FUNCTIONS AND ARGUMENTS{{{1
 # -------------------------------------------------
-# (2.1) Set printout options: this was added to allow program printout to span the whole terminal 
+# (2.1) Set printout options: this allows the program printout to span the whole terminal 
 np.set_printoptions(suppress=False,linewidth=999,threshold=999)
 
-# (2.2) "diag" function: takes a n-sized vector and output an n by n diagonal matrix which diagonal is composed of the input vector's elements 
-def diag(dW):
-	W = np.zeros((len(dW),len(dW)))
-	for i in range(len(dW)): W[i,i] = dW[i]
-	return W
-
-# (2.3) Clear  function: clears the terminal. Similar to MATLAB's cls 
+# (2.2) Clear  function: clears the terminal. Similar to MATLAB's cls and bash's cls
 def clear(): os.system('cls' if os.name == 'nt' else 'clear')
-#clear()
-#clear()
 
 # (2.3) "pause" function: halts program execution and asks for enter 
 def pause(string):
@@ -95,10 +85,7 @@ def pause(string):
 # (2.4) readtabline reads a line in a given file f then arranges it in an array which vectors are the strings
 #	in the line that are separated by the tab character '\t'. It also removes the new line '\n' character
 #	from the last slot in the line.
-def readtabline(f):
-	line = f.readline()
-	line = line.strip().split('\t')
-	return line
+def readtabline(f): return f.readline().strip().split('\t')
 
 # (2.5) Arguments and options 
 #	Creates arguments:
@@ -107,14 +94,6 @@ parser.add_argument(	"net",
 			type = str,
 			metavar = 'NETFILE',
 			help='Target network file')
-
-# --meas [MEASUREMENTS FILE] is the target system measurements file. This string is stored in a 'measurementsFile' variable
-parser.add_argument(	"meas",
-			type = str,
-			metavar = 'MEASFILE',
-			help='Target measurements file.')
-
-# Creates options:
 
 # VERBOSE option
 parser.add_argument(	'--verbose', '-v',
@@ -166,11 +145,17 @@ parser.add_argument(	'--powerflow', '-pf',
 			action = 'store_true',
 			help = 'Perform Power Flow calculation of the target system.')
 
+# MEASUREMENTS FILE
+parser.add_argument(	'--measfile', '-meas',
+			type = str,
+			metavar = 'MEASFILE',
+			help = 'Measurements file for state estimation.')
+
 # STATE ESTIMATION
 parser.add_argument(	'--estimatestate', '-se',
 			default = False,
 			action = 'store_true',
-			help = 'Perform State Estimation of the Target Sysem.')
+			help = 'Perform State Estimation of the Target Sysem. A measurement file needs to be provided.')
 
 # DYNAMICAL FAULT SIMULATION
 parser.add_argument(	'--dynamicalfault', '-dyn',
@@ -190,40 +175,43 @@ parser.add_argument(	'--pointspersecond', '-pps',
 			default = 1000,
 			help = 'Number of points per second of the simulation plots. Default is 1000.')
 
-
 # Gathering arguments and options
 args = parser.parse_args()
+cls = args.cls
+if cls:
+	clear()
+	clear()
 
 verbose = args.verbose[0]
-measurementsFile = args.meas
+measurementsFile = args.measfile
 networkFile = args.net
 obs = args.obs
 crit = args.crit
-cls = args.cls
 powerflow = args.powerflow
 estimatestate = args.estimatestate
 dyn = args.dynamicalfault
-tFinal = args.time
-pps = args.pointspersecond
 
-if clear:
-	clear()
-	clear()
+if obs and not measurementsFile:
+	sys.exit('--> Fatal error: observability analysis was requested but no measurements file was supplied.')
+if crit and not measurementsFile:
+	sys.exit('--> Fatal error: observability analysis was requested but no measurements file was supplied.')
 
 # -------------------------------------------------
 # (3) DESCRIBRING SYSTEM: READING FILE {{{1
 # -------------------------------------------------
 
+# (3.1) lineNumber returns the line number of the current pointer in a given file
 def lineNumber(f):
 	i = 0
-	pointer = f.tell()
-	breakFlag = True
-	f.seek(0)
-	while breakFlag == True:
-		line = f.readline()
-		pointerTemp = f.tell()
-		if pointerTemp != pointer: i += 1
-		else: breakFlag = False
+	pointer = f.tell()	# Captures the pointer of the present line
+	f.seek(0)		# Goes to the beggining of the file
+	while f.tell() != pointer:
+		# This loop sweeps the lines in the file and compares it to the stored pointer If there is a match, break and return the counter
+	#	f.readline
+	#	pointerTemp = f.tell()
+	#	if pointerTemp == pointer: break
+		i += 1
+		f.readline()
 
 	return i
 
@@ -428,134 +416,135 @@ with open(networkFile,'r') as fileData:
 # END OF FILE MANIPULATION: CLOSING FILE --------
 
 # (3.2) ACQUIRING POWER MEASUREMENTS {{{2
-with open(measurementsFile,'r') as fileData:
+if measurementsFile:
+	with open(measurementsFile,'r') as fileData:
 
-	breakFlag = True
+		breakFlag = True
 
-	# (3.2.1) Searching for start card
+		# (3.2.1) Searching for start card
 
-	while breakFlag==True:
+		while breakFlag==True:
+			line = readtabline(fileData)
+			if line[0] == 'BEGGINING ACTIVE POWER MEASURES': breakFlag = False
+
+		print(' --> Beginning active power measurements data reading... ',end='' )
+
+		fileData.readline()
+		isP = np.zeros((nBus,nBus),dtype=int)
+		wP = np.zeros((nBus,nBus))
+		P = np.zeros((nBus,nBus))
+
+		# (3.2.2) Acquiring active power measures
+		breakFlag = True
 		line = readtabline(fileData)
-		if line[0] == 'BEGGINING ACTIVE POWER MEASURES': breakFlag = False
+		while breakFlag == True:
+			fromBus = int(float(line[0]))
+			toBus = int(float(line[1]))
+			isP[fromBus-1,toBus-1] = 1
+			P[fromBus-1,toBus-1] = float(line[2])
+			wP[fromBus-1,toBus-1] = float(line[3])
 
-	print(' --> Beginning active power measurements data reading... ',end='' )
+			line = readtabline(fileData)
+			if line[0] == '-999': breakFlag  = False
 
-	fileData.readline()
-	isP = np.zeros((nBus,nBus),dtype=int)
-	wP = np.zeros((nBus,nBus))
-	P = np.zeros((nBus,nBus))
-
-	# (3.2.2) Acquiring active power measures
-	breakFlag = True
-	line = readtabline(fileData)
-	while breakFlag == True:
-		fromBus = int(float(line[0]))
-		toBus = int(float(line[1]))
-		isP[fromBus-1,toBus-1] = 1
-		P[fromBus-1,toBus-1] = float(line[2])
-		wP[fromBus-1,toBus-1] = float(line[3])
-
-		line = readtabline(fileData)
-		if line[0] == '-999': breakFlag  = False
-
-	# (3.2.3) Acquiring reactive power measures
-	print(' Done.\n --> Beginning reactive power measurements data reading... ',end='' )
-
-	breakFlag = True
-	while breakFlag==True:
-		line = readtabline(fileData)
-		if line[0] == 'BEGGINING REACTIVE POWER MEASURES': breakFlag = False
-
-	wQ = np.zeros((nBus,nBus))
-	Q = np.zeros((nBus,nBus))
-
-	fileData.readline()
-	breakFlag = True
-	line = readtabline(fileData)
-	while breakFlag == True:
-
-		fromBus = int(float(line[0]))
-		toBus = int(float(line[1]))
-		Q[fromBus-1,toBus-1] = float(line[2])
-		wQ[fromBus-1,toBus-1] = float(line[3])	
-
-		line = readtabline(fileData)
-		if line[0] == '-999':
-			breakFlag  = False
-
-	# (3.2.4) Acquiring voltage measures
-	print(' Done.\n --> Beginning voltage measurements data reading... ',end='' )
-
-	breakFlag = True
-	while breakFlag==True:
-		line = readtabline(fileData)
-		if line[0] == 'BEGGINING VOLTAGE MEASURES': breakFlag = False
-	fileData.readline()
-
-	isV = np.zeros(nBus,dtype=int)
-	wV = np.zeros(nBus)
-	Vm = np.zeros(nBus)
-	breakFlag = True
-	line = readtabline(fileData)
-	while breakFlag == True:
-
-		fromBus = int(float(line[0]))
-		isV[fromBus-1] = 1
-		Vm[fromBus-1] = float(line[1])
-		wV[fromBus-1] = float(line[2])
-
-		line = readtabline(fileData)
-		if line[0] == '-999': breakFlag  = False	
-
-	# (3.2.5) Acquiring available pseudo-measures
-	if obs:
-		print(' Done.\n --> Beginning available pseudo-measurements data reading... ',end='' )
+		# (3.2.3) Acquiring reactive power measures
+		print(' Done.\n --> Beginning reactive power measurements data reading... ',end='' )
 
 		breakFlag = True
 		while breakFlag==True:
 			line = readtabline(fileData)
-			if line[0] == 'BEGGINING AVAILABLE PSEUDO-MEASURES (IN ORDER OF PRIORITY)': breakFlag = False
-		fileData.readline()
+			if line[0] == 'BEGGINING REACTIVE POWER MEASURES': breakFlag = False
 
-		# Preallocating isPseudo with one row which will be deleted after
-		isPseudo = np.zeros((1,2))
-		pseudoP = np.zeros((nBus,nBus))
-		pseudoWP = np.zeros((nBus,nBus))
-		pseudoQ = np.zeros((nBus,nBus))
-		pseudoWQ = np.zeros((nBus,nBus))
+		wQ = np.zeros((nBus,nBus))
+		Q = np.zeros((nBus,nBus))
+
+		fileData.readline()
+		breakFlag = True
+		line = readtabline(fileData)
+		while breakFlag == True:
+
+			fromBus = int(float(line[0]))
+			toBus = int(float(line[1]))
+			Q[fromBus-1,toBus-1] = float(line[2])
+			wQ[fromBus-1,toBus-1] = float(line[3])	
+
+			line = readtabline(fileData)
+			if line[0] == '-999':
+				breakFlag  = False
+
+		# (3.2.4) Acquiring voltage measures
+		print(' Done.\n --> Beginning voltage measurements data reading... ',end='' )
 
 		breakFlag = True
-		while breakFlag == True:
+		while breakFlag==True:
 			line = readtabline(fileData)
-			if line[0] == '-999': breakFlag  = False
+			if line[0] == 'BEGGINING VOLTAGE MEASURES': breakFlag = False
+		fileData.readline()
 
-			if breakFlag == True:
-				fromBus = int(float(line[0]))
-				toBus = int(float(line[1]))
-				isPseudo = conc((isPseudo,array([[fromBus-1,toBus-1]])),axis=0)
-				pseudoP[fromBus-1,toBus-1] = float(line[2])
-				pseudoWP[fromBus-1,toBus-1] = float(line[3])	
-				pseudoQ[fromBus-1,toBus-1] = float(line[4])
-				pseudoWQ[fromBus-1,toBus-1] = float(line[5])
+		isV = np.zeros(nBus,dtype=int)
+		wV = np.zeros(nBus)
+		Vm = np.zeros(nBus)
+		breakFlag = True
+		line = readtabline(fileData)
+		while breakFlag == True:
 
-		# Deleting first row from preallocating
-		isPseudo = np.delete(isPseudo,0,axis=0)
+			fromBus = int(float(line[0]))
+			isV[fromBus-1] = 1
+			Vm[fromBus-1] = float(line[1])
+			wV[fromBus-1] = float(line[2])
 
-	print(' Done.\n')
+			line = readtabline(fileData)
+			if line[0] == '-999': breakFlag  = False	
+
+		# (3.2.5) Acquiring available pseudo-measures
+		if obs:
+			print(' Done.\n --> Beginning available pseudo-measurements data reading... ',end='' )
+
+			breakFlag = True
+			while breakFlag==True:
+				line = readtabline(fileData)
+				if line[0] == 'BEGGINING AVAILABLE PSEUDO-MEASURES (IN ORDER OF PRIORITY)': breakFlag = False
+			fileData.readline()
+
+			# Preallocating isPseudo with one row which will be deleted after
+			isPseudo = np.zeros((1,2))
+			pseudoP = np.zeros((nBus,nBus))
+			pseudoWP = np.zeros((nBus,nBus))
+			pseudoQ = np.zeros((nBus,nBus))
+			pseudoWQ = np.zeros((nBus,nBus))
+
+			breakFlag = True
+			while breakFlag == True:
+				line = readtabline(fileData)
+				if line[0] == '-999': breakFlag  = False
+
+				if breakFlag == True:
+					fromBus = int(float(line[0]))
+					toBus = int(float(line[1]))
+					isPseudo = conc((isPseudo,array([[fromBus-1,toBus-1]])),axis=0)
+					pseudoP[fromBus-1,toBus-1] = float(line[2])
+					pseudoWP[fromBus-1,toBus-1] = float(line[3])	
+					pseudoQ[fromBus-1,toBus-1] = float(line[4])
+					pseudoWQ[fromBus-1,toBus-1] = float(line[5])
+
+			# Deleting first row from preallocating
+			isPseudo = np.delete(isPseudo,0,axis=0)
+
+
+		#(3.2.6) Counting P and V readings
+		numP = isP.sum() # Number of P readings
+		numV = isV.sum()
+
+		print(' Done.\n')
 
 # END OF FILE MANIPULATION: CLOSING FILE --------
-
-#(3.2.6) Counting P and V readings
-numP = isP.sum() # Number of P readings
-numV = isV.sum()
-
 # -------------------------------------------------
 # (4) TESTING OBSERVABILITY {{{1
 # -------------------------------------------------
 
 if obs:
 	# (3.3.1) Building Hdelta and gqain matrix
-	if verbose > 0: print('\n' + '-'*50 + '\n TESTING OBSERVABILITY \n' + '-'*50)
+	if verbose > 0: print('\n' + '-'*50 + '\n OBSERVABILITY ANALYSIS \n' + '-'*50)
 	else: print('\n --> Beggining observability test.',end='')
 
 	obs = np.zeros((numP,nBus),dtype=float)
@@ -582,7 +571,7 @@ if obs:
 	Pt,Lt,Ut = LU(obs)
 	dU = array([Ut[k,k] for k in range(Ut.shape[0])])
 
-	if verbose > 2: print('\n --> Upper-triangularized linear-model jacobian H: HTri = \n{0}'.format(Ut))
+	if verbose > 2: print('\n --> Upper-triangularized linear-model mF.Jacobian H: HTri = \n{0}'.format(Ut))
 	#print('\n --> Main diagonal of U: diag(U) = \n{0}'.format(dU))
 
 	if verbose > 2: print('\n --> Gain matrix: GTri = \n{0}'.format(gain))
@@ -596,7 +585,7 @@ if obs:
 	# (3.3.3) Checking for null pivots and restoring observability from avalable pseudos
 	zeroPivots = 0	# Number of null pivots: should be one in order for the network to be observable
 	for k in range(dU.shape[0]):
-		if abs(dU[k]) < 1e-8:
+		if abs(dU[k]) < 1e-8:	# Due to numerical error propagation, the null pivots do not come as zero per se, but small numbers. This threshold of 1e-8 was empirically set and seems to work fine for all cases.
 			zeroPivots += 1
 
 	if zeroPivots == 1:
@@ -747,66 +736,62 @@ if crit:
 		print('\n --> No critical measurements were found.')
 
 # -------------------------------------------------
-# (3.5) CALCULATING FLAT START
+# (7) SETTING UP NUMERICAL METHOD FOR STATE ESTIATION {{{1
 # -------------------------------------------------
-			
-# (3.5.1) CONSTRUCTING W MATRIX
-W = np.empty((2*numP + numV,1))			# Preallocating
-i = 0						# Starting counter
-for j in range(nBus):	
-	for n in range(nBus):
-		if isP[j,n]:
-			W[i] = 1/wP[j,n]**2
-			i+=1
-for j in range(nBus):	
-	for n in range(nBus):
-		if isP[j,n]:
-			W[i] = 1/wQ[j,n]**2
-			i += 1
+if estimatestate:
 
-for j in range(nBus):	
-	if isV[j]:
-		W[i] = 1/wV[j]**2
-		i += 1
-W = diag(W)
+	# (3.5.2) DESCRIBING MEASUREMENT ARRAY Z = [P,Q,V].
 
-# (3.5.2) DESCRIBING MEASUREMENT ARRAY Z = [P,Q,V].
+	Zflat = mF.Z(P,Q,isP,Vm,isV)
 
-Zflat = Z(P,Q,isP,Vm,isV)
+	if verbose > 1: 
+		pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
+		for j in range(nBus):	
+			for n in range(nBus):
+				if isP[j,n]:
+					print('Z[{0:2.0f}] = P[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,P[j,n]))
+					i+=1
+		for j in range(nBus):	
+			for n in range(nBus):
+				if isP[j,n]:
+					if verbose > 1: print('Z[{0:2.0f}] = Q[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,Q[j,n]))
+					i += 1
 
-if verbose > 1: 
-	pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
+		for j in range(nBus):	
+			if isV[j]:
+				if verbose > 1: print('Z[{0:2.0f}] = V[{1:3}]     = {2:>10f}'.format(i+1,j+1,Vm[j]))
+				i += 1
+
+	# (3.5.3) PRINTING RESULTS
+	if verbose > 1:
+		print('\n' + '-'*50 + '\n DESCRIBING SYSTEM \n' + '-'*50)
+		print(' --> r = {0}\n\n --> x = {1}\n\n --> g = \n{2}\n\n --> b = \n{3}\n\n --> bsh = \n{4}\n\n --> Y = \n{5} \n\n --> stdP = \n{6}\n\n --> stdQ = \n{7}\n\n --> a = \n{8}\n'.format(r,x,g,b,bsh,Y,wP,wQ,a))
+
+	# (3.5.1) CONSTRUCTING W MATRIX
+	W = np.empty(2*numP + numV)			# Preallocating
+	i = 0						# Starting counter
 	for j in range(nBus):	
 		for n in range(nBus):
 			if isP[j,n]:
-				print('Z[{0:2.0f}] = P[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,P[j,n]))
+				W[i] = 1/wP[j,n]**2
 				i+=1
 	for j in range(nBus):	
 		for n in range(nBus):
 			if isP[j,n]:
-				if verbose > 1: print('Z[{0:2.0f}] = Q[{1:3},{2:3}] = {3:>10f}'.format(i+1,j+1,n+1,Q[j,n]))
+				W[i] = 1/wQ[j,n]**2
 				i += 1
 
 	for j in range(nBus):	
 		if isV[j]:
-			if verbose > 1: print('Z[{0:2.0f}] = V[{1:3}]     = {2:>10f}'.format(i+1,j+1,Vm[j]))
+			W[i] = 1/wV[j]**2
 			i += 1
 
-# (3.5.3) PRINTING RESULTS
-if verbose > 1:
-	print('\n' + '-'*50 + '\n DESCRIBING SYSTEM \n' + '-'*50)
-	print(' --> r = {0}\n\n --> x = {1}\n\n --> g = \n{2}\n\n --> b = \n{3}\n\n --> bsh = \n{4}\n\n --> Y = \n{5} \n\n --> stdP = \n{6}\n\n --> stdQ = \n{7}\n\n --> a = \n{8}\n'.format(r,x,g,b,bsh,Y,wP,wQ,a))
+	W = np.diag(W)
 
-# -------------------------------------------------
-
-# -------------------------------------------------
-# (7) SETTING UP NUMERICAL METHOD FOR STATE ESTIATION {{{1
-# -------------------------------------------------
-if estimatestate:
 	# (5.1) Initial guess: flat start
 	V = np.ones(nBus)
 	theta = np.zeros(nBus)
-	H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
+	H = mF.Jac(V,theta,K,a,y,Y,bsh,isP,isV)
 
 	if verbose > 1:
 		print('\n' + '-'*50 + '\n STATE ESTIMATION FLAT START \n' + '-'*50)
@@ -814,7 +799,7 @@ if estimatestate:
 		print(' --> Beggining flat start calculations... ', end='')
 
 	if verbose > 1:
-		print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(H,h(V,theta,K,a,y,Y,bsh,isP,isV)))
+		print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(H,mF.h(V,theta,K,a,y,Y,bsh,isP,isV)))
 
 	# (5.2) Defining simulation parameters from the arguments passed to the script
 	absTol = args.tol
@@ -824,18 +809,16 @@ if estimatestate:
 	# (5.3) Initiating iteration counter
 	itCount = 0	
 
-	# (5.4) Calculating jacobian and its gradient at flat start
+	# (5.4) Calculating mF.Jacobian and its gradient at flat start
 
-
-	grad = -transpose(H) @ W @ (Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))
-
+	grad = -transpose(H) @ W @ (mF.Z(P,Q,isP,Vm,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV))
 
 	if verbose <= 1: print('Done.')
 
 	# (5.5) Printing method parameters
 
 	if verbose > 1:
-		print('\n --> Norm of the jacobian gradient at flat start: |grad(J)| = {0}'.format(norm(grad)))
+		print('\n --> Norm of the mF.Jacobian gradient at flat start: |grad(J)| = {0}'.format(norm(grad)))
 
 	if verbose > 0:
 		pause('\n --> Next step is the power flow numerical method. Press <ENTER> to continue.')
@@ -860,27 +843,27 @@ if estimatestate:
 		# (6.2) Printing iteration report
 		if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 		
-		# (6.3) Calculating jacobian
-		H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
+		# (6.3) Calculating mF.Jacobian
+		H = mF.Jac(V,theta,K,a,y,Y,bsh,isP,isV)
 		
 		# (6.4) Calculating gain matrix
 		U = transpose(H) @ W @ H
 
 		# (6.5) Calculating state update
-		dX = inv(U) @ transpose(H) @ W @ (Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))
+		dX = inv(U) @ transpose(H) @ W @ (mF.Z(P,Q,isP,Vm,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV))
 
 		# (6.6) Updating V and theta
 		theta[1:] += dX[0:nBus-1,0]
 		V += dX[nBus-1:,0]
 
-		# (6.7) Calculating jacobian gradient
-		grad = -transpose(H) @ W @ (Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))
+		# (6.7) Calculating mF.Jacobian gradient
+		grad = -transpose(H) @ W @ (mF.Z(P,Q,isP,Vm,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV))
 		
 		# (6.8) Printing iteration results
 		if verbose > 0:
 			print('\n --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}\n --> |grad(J)| = {3}'.format(norm(dX),transpose(dX[nBus-1:,0]),dX[0:nBus-1,0],transpose(norm(grad))))
 		if verbose > 1:
-			print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(Jac(V,theta,K,a,y,Y,bsh,isP,isV),(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))/norm(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)),norm(Z(P,Q,isP,Vm,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))))
+			print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(mF.Jac(V,theta,K,a,y,Y,bsh,isP,isV),(mF.Z(P,Q,isP,Vm,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV))/norm(mF.Z(P,Q,isP,Vm,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV)),norm(mF.Z(P,Q,isP,Vm,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV))))
 
 		# (6.9) Testing for iteration sucess or divergence
 		if norm(dX) < absTol: # (6.8.1) If success
@@ -906,7 +889,7 @@ if estimatestate:
 	elapsed = time.time() - tstart
 
 	# (6.12) Calculating normalized residual
-	r = Z(P,Q,isP,np.zeros(nBus),isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)
+	r = mF.Z(P,Q,isP,np.zeros(nBus),isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV)
 	cov = inv(W) - H @ inv(U) @ transpose(H)
 	rn = array([ r[i]/sqrt(cov[i,i]) for i in range(len(r))])
 
@@ -941,7 +924,7 @@ if powerflow or dyn:
 		print('\n --> Beggining power flow calculations... ', end='')
 
 	if verbose > 1:
-		print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(Jac(V,theta,K,a,y,Y,bsh,isP,isV),h(V,theta,K,a,y,Y,bsh,isP,isV)))
+		print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(mF.Jac(V,theta,K,a,y,Y,bsh,isP,isV),mF.h(V,theta,K,a,y,Y,bsh,isP,isV)))
 
 	# (5.2) Defining simulation parameters from the arguments passed to the script
 	absTol = args.tol
@@ -974,12 +957,12 @@ if powerflow or dyn:
 		# (6.2) Printing iteration report
 		if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 		
-		# (6.3) Calculating jacobian
-		H = Jac(V,theta,K,a,y,Y,bsh,isP,isV)
+		# (6.3) Calculating mF.Jacobian
+		H = mF.Jac(V,theta,K,a,y,Y,bsh,isP,isV)
 		H = np.delete(H,0,axis=0) # Removing slack bar angle derivatives for it is known
 
 		# (6.5) Calculating state update
-		deltaSLC = np.delete(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV),0,axis=0)
+		deltaSLC = np.delete(mF.Z(P,Q,isP,V,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV),0,axis=0)
 		dX = inv(H) @ deltaSLC
 
 		# (6.6) Updating V and theta
@@ -990,7 +973,9 @@ if powerflow or dyn:
 		if verbose > 0:
 			print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[nBus-1:,0]),dX[0:nBus-1,0]))
 		if verbose > 1:
-			print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(Jac(V,theta,K,a,y,Y,bsh,isP,isV),(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))/norm(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV)),norm(Z(P,Q,isP,V,isV) - h(V,theta,K,a,y,Y,bsh,isP,isV))))
+			print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(	mF.Jac(V,theta,K,a,y,Y,bsh,isP,isV),
+												(mF.Z(P,Q,isP,V,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV))/norm(mF.Z(P,Q,isP,V,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV)),
+												norm(mF.Z(P,Q,isP,V,isV) - mF.h(V,theta,K,a,y,Y,bsh,isP,isV))))
 
 		# (6.9) Testing for iteration sucess or divergence
 		if norm(dX) < absTol: # (6.8.1) If success
@@ -1023,28 +1008,25 @@ if powerflow or dyn:
 # (11) STARTING NUMERICAL METHOD FOR DYNAMICAL SIMULATION {{{1
 # -------------------------------------------------
 if dyn:
+	# Gathering simulation parameters from args
+	tFinal = args.time
+	pps = args.pointspersecond
+
 	print('\n' + '-'*50 + '\n DYNAMIC FAULT SIMULATION \n' + '-'*50)
-	print('\n --> Setting up dynamical simulation...',end='')
-	YLoad = [(Pload[i] - 1j*Qload[i])/V[i]**2 for i in range(nBus)]
+	print('\n --> Setting up dynamical simulation...')
+
+	# (11.1) Pre-fault state
+	YLoad = [(Pload[i] - 1j*Qload[i])/V[i]**2 for i in range(nBus)]	# YLoad is the equivalent conductance load matrix. Each load is modelled as a constant impedance
 	
-	# Permutating the Y and K matrixes. Explanation: the Y matrix built before did not consider which bars were generators and which are not. Nevertheless, to build the Y_RED matrix, the generator buses must be the first n. This means that we must obtain a new Y matrix wherein the first n columns are the genertor buses.
-
+	# Permutating the Y and K matrixes. Explanation: the Y matrix built before did not consider which bars were generators and which are not. Nevertheless, to build the Y_RED matrix, the generator buses must be the first rows. This means that we must obtain a new Y matrix wherein the first n columns are the genertor buses.
+	# In order to do this, a permutation matrix PDyn is built. The building process works as follows:
 	PDyn = np.eye(nBus)
-
-	def isGen(busN,genData):
-		flag = False
-		for k in range(nGen):
-			if genData[k,0]-1 == busN:
-				flag = True
-				break
-
-		return flag
 		
 	genDataDyn = copy(genData)
 	busNameDyn = copy(busName)
 	for i in range(nGen):
 		for k in range(int(genDataDyn[i,0])):
-			if not isGen(k,genDataDyn):
+			if not mF.isGen(k,genDataDyn):
 				temp = copy(PDyn[int(genDataDyn[i,0]-1)])
 				PDyn[int(genDataDyn[i,0]-1)] = copy(PDyn[k])
 				PDyn[k] = temp
@@ -1093,7 +1075,7 @@ if dyn:
 
 		YredFault,CFault,DFault = mF.reduceGrid(YDynFault,YLoadDynFault,VDynFault,genDataDyn)
 
-		print('Done. \n --> Starting numerical simulation of fault {0}...'.format(int(faultData[q,0] + 1)),end='')
+		print(' --> Starting numerical simulation of fault {0}...'.format(int(faultData[q,0] + 1)),end='')
 
 
 		tFault = np.linspace(0,faultData[q,4],int(round(pps*(faultData[q,4]))),endpoint=True)
@@ -1101,9 +1083,7 @@ if dyn:
 
 		for i in range(nGen): y0[2*i] = thetaDyn[i]
 
-	#	print('\n --> y0 = {0}'.format(y0))
-		#print('\n --> Initial ODE: {0}'.format(mF.odeFault1(y0,0,C,D,Yred,VDyn,pm,genDataDyn)))
-		solFault = odeint(mF.odeFault1,y0,tFault,args=(CFault,DFault,YredFault,VDyn,pm,genDataDyn))
+		solFault = odeint(mF.sm2,y0,tFault,args=(CFault,DFault,YredFault,VDyn,pm,genDataDyn))
 
 		# Calculating post-fault system
 
@@ -1119,9 +1099,9 @@ if dyn:
 		YredPost,CPost,DPost = mF.reduceGrid(YDynPost,YLoadDynPost,VDyn,genDataDyn)
 
 		tPost = np.linspace(faultData[q,4],tFinal,int(round(pps*(tFinal - faultData[q,4]))),endpoint=True)
-		solPost = odeint(mF.odeFault1,solFault[-1,:],tPost,args=(CPost,DPost,YredPost,VDyn,pm,genDataDyn))
+		solPost = odeint(mF.sm2,solFault[-1,:],tPost,args=(CPost,DPost,YredPost,VDyn,pm,genDataDyn))
 
-		print('Done. \n')
+		print('Done.')
 
 		# Plotting results
 
@@ -1151,6 +1131,7 @@ if dyn:
 		fig[q].suptitle(r'Fault {0} results. Description: short-circuit at line connecting buses {1} and {2}, at position {3}, with open time {4} ms'.format(int(faultData[q,0])+1, int(faultData[q,1]+1), int(faultData[q,2]+1), faultData[q,3], 1000*faultData[q,4]))
 		ax2.set_xlabel('Time (s)')
 
-print(' --> Plotting results.')
-pyplt.legend()
-pyplt.show()
+	print(' --> Plotting dynamical simulation results.')
+	pyplt.legend()
+
+	pyplt.show()
