@@ -1050,18 +1050,20 @@ if dyn:
 
 	for q in range(nFault):
 
-		faultData[q,4] /= 1000
-
 		lineAdmittance = Y[int(faultData[q,1]),int(faultData[q,2])] 
 
 		YFault = copy(Y)
 		YLoadFault = copy(YLoad)
+		VDynFault = copy(V)
 	
 		YFault[int(faultData[q,1]),int(faultData[q,2])] = 0
 		YFault[int(faultData[q,2]),int(faultData[q,1])] = 0
 
+
 		if int(faultData[q,3]) == 0:
-			YLoadFault[int(faultData[q,1])] += lineAdmittance*1e3
+			#YLoadFault[int(faultData[q,1])] += lineAdmittance*1e3
+			YLoadFault[int(faultData[q,1])] = 0
+			VDynFault[int(faultData[q,1])] = 0
 			YLoadFault[int(faultData[q,2])] += lineAdmittance
 		elif int(faultData[q,3]) == 1:
 			YLoadFault[int(faultData[q,1])] += lineAdmittance
@@ -1069,9 +1071,10 @@ if dyn:
 		else:
 			YLoadFault[int(faultData[q,1])] += lineAdmittance/faultData[q,3]
 			YLoadFault[int(faultData[q,2])] += lineAdmittance/(1-faultData[q,3])
+
 		YDynFault = PDyn@YFault@PDyn
 		YLoadDynFault = PDyn@YLoadFault
-		VDynFault,thetaDynFault = PDyn@V, PDyn@theta
+		VDynFault,thetaDynFault = PDyn@VDynFault, PDyn@theta
 
 		YredFault,CFault,DFault = mF.reduceGrid(YDynFault,YLoadDynFault,VDynFault,genDataDyn)
 
@@ -1113,7 +1116,7 @@ if dyn:
 		ax2 = fig[q].add_subplot(2,1,2)
 
 		for i in range(nGen):
-			ax2.plot(t,sol[:, 2*i])
+			ax2.plot(t,sol[:, 2*i] - sol[:, 0])
 			ax1.plot(t,sol[:, 2*i+1]-sol[:, 1],label=busName[int(genData[i,0])-1])
 
 		ax1.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F$'.format(faultData[q,4]))
