@@ -1,9 +1,10 @@
 Date:		08/19/93
-Name:		UW ARCHIVE
+Author name:	UW ARCHIVE
 MVA base:	100.0
 Year:		1962
 Season:		W
 Case id:	IEEE 14 Bus Test Case
+Data taken from Kodsi, Sameh K.M. and Canizares, Claudio A. Modelling and Simulation of IEEE 14 Bus System With FACTs Controllers. Technical report, 2003. Available at <https://www.researchgate.net/profile/Mohamed_Mourad_Lafifi/post/Datasheet_for_5_machine_14_bus_ieee_system2/attachment/59d637fe79197b8077995408/AS%3A395594351824896%401471328451959/download/MODELING+AND+SIMULATION+OF+IEEE+14+BUS+SYSTEM+WITH+FACTS+CONTROLLERS+IEEEBenchmarkTFreport.pdf> (accessed jun 27, 2019).
 -------------------------------------------------
 BUS DATA FOLLOWS
 -------------------------------------------------
@@ -58,9 +59,7 @@ GENERATOR DATA FOLLOWS
 -------------------------------------------------
 FAULT DATA FOLLOWS
 -------------------------------------------------
-1	2	3	0	1
-2	4	9	0	0.01
-3	1	2	0	0.1
-4	7	8	0	0.1
+1	0	1
+8	0	0.01
 -999
 END OF DATA
