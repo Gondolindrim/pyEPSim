@@ -41,7 +41,6 @@ rc('font',**{'family':'serif','serif':['Palatino']})
 pyplt.rc('text', usetex=True)
 pyplt.rc('text.latex', preamble=r'\usepackage{xfrac}')
 
-
 # (1.2) SCIPY FOR LU DECOMPOSITION 
 import scipy
 import scipy.linalg
@@ -60,17 +59,17 @@ import sys
 # (1.5) Time library: allows to count execution time 
 import time
 
-# (1.6) Argument Parser to pass arguments to script  2
-import argparse
-parser = argparse.ArgumentParser(
-	prog = 'Power flow calculator',
-	description = 'Power flow calculator that takes a system data in the IEEE CDF and a measurements file in the LACO CDF.',
-	)
-
 # (1.7) mF.Jacobian matrix functions
 import matrixFunctions as mF
 
-#import linecache as lc
+# (1.8) Classes library
+import classes as cL
+
+import dynamicModels as dM
+
+import pyEPSim_args as pA
+
+import loadcase as lC
 
 # -------------------------------------------------
 # (2) CUSTOM FUNCTIONS, ARGUMENTS AND OBJECTS{{{1
@@ -91,226 +90,19 @@ def pause(string):
 #	from the last slot in the line.
 def readtabline(f): return f.readline().strip().split('\t')
 
-# (2.5) Arguments and options {{{2
-#	Creates arguments:
-#	--net [NETWORK FILE] is the target system network file. This string is stored in a 'networkFile' variable. The network file describes the system topologically and parametrically: how many buses, which buses are connected to which, how many generators and how they are connected; the parameters of these generators, the faults applicable and their quality.
-parser.add_argument(	"net",
-			type = str,
-			metavar = 'NETFILE',
-			help='Target network file')
-
-# VERBOSE option
-parser.add_argument(	'--verbose', '-v',
-			type = int,
-			choices = [0,1,2],
-			default = [1],
-			nargs = 1,
-			help = 'Verbose level. 0 for no output, 1 for critical output, 2 for detailed output. Default is 1.')
-
-# CLEAR option
-parser.add_argument(	'--cls',
-			default = False,
-			action = 'store_true',
-			help = 'Clears the terminal before executing the program.')
-
-# TOL option
-parser.add_argument(	'--tol',
-			type=float,
-			default = 1e-6,
-			help = 'Newton-Raphson numerical method tolerance. Default is 1e-6.')
-
-# MAXITER option
-parser.add_argument(	'--maxiter',
-			type = int,
-			default = 10,
-			help = 'Newton-Raphson numerical method maximum iterations. Default is 10.')
-
-# DELTAMAX OPTION
-parser.add_argument(	'--deltamax',
-			type = int,
-			default = 10,
-			help = 'Newton-Raphson numerical method maximum  step magnitude to consider as divergence. Default is 10.')
-
-# POWER FLOW OPTION
-parser.add_argument(	'--powerflow', '-pf',
-			default = False,
-			action = 'store_true',
-			help = 'Perform Power Flow calculation of the target system.')
-
-# FINAL SIMULATION TIME
-parser.add_argument(	'--time', '-t',
-			type = float,
-			default = 1,
-			help = 'Dynamical simulation time length in seconds. Default is 1.')
-
-# POINTS PER SECOND
-parser.add_argument(	'--pointspersecond', '-pps',
-			type = int,
-			default = 1000,
-			help = 'Number of points per second of the simulation plots. Default is 1000.')
-
-# Gathering arguments and options
-args = parser.parse_args()
-cls = args.cls
-if cls:
-	clear()
-	clear()
-
-verbose = args.verbose[0]
-networkFile = args.net
-
-# (2.6) Case object {{{2
-# The case object stores data about a particular "case". "Cases" are a strain of data which comprise simulation parameters of a given system. These parameters include topological data like bus, branch and generator data and simulatory parameters, such as simulation time, plot data, tolerances et cetera. This object serves the purpose of giving the user an easy way to modify and customize the set of parameters -- be them topological or simulatory -- without having to generate a whole new file.
-# --> "busData" is a list of "bus" objects (see (2.7)), which store information about buses like injected power, load power, name, number;
-# --> "branchData" is a list of "branch" objects (see (2.8)) which store information about the branches of the system, such as resistance and reactance, transformer turns ratio and so on;
-# --> "genData" is a list of "generator" objects (see (2.9)) which sotre information about system generators. These generators are modelled as synchronous machines; the "generator" object sotres basically constructive parameters of the machines.
-# --> "faultData" is a list of "fault" objects (see (2.10)) which store information about possible faults in the system. The listed faults will be used for dynamical simulation.
-class case:
-	def __init__(self,busData,branchData,genData,faultData,Sb,Vb):
-		self.busData = busData
-		self.branchData = branchData
-		self.genData = genData
-		self.faultData = faultData	
-		self.Sb = Sb			# Base power value
-		self.Vb = Vb			# Base voltage value
-
-# (2.7) Bus object {{{2
-# The bus object stores data for a particular bus of the net:
-# --> "number" is the bus number in a list. This number can be user-attributed in the net-file,
-# but such numbers must be consecutive and have no gaps.
-# --> "name" is a human-readable name for that particular bus, so that the user can
-# distinguish buses by a name rather than their numbers.
-# --> "pLoad" and "qLoad" are respectively the active and reactive power that the bus exports as load.
-# These loads are further modelled in the algorithm by a constant impedance.
-# --> "pGen" and "qGen" are respectively the active and reactive power injected into the bus.
-# --> "gsh" and "bsh" are respectively the shunt conductance and susceptance attached to the bus. These
-# will be added to the pLoad and qLoad after these are converted to shunt impedances.
-class bus:
-	def __init__(self,number,name,pLoad,qLoad,pGen,qGen,gsh,bsh):
-		self.number = int(number)
-		self.name = str(name)
-		self.pLoad = float(pLoad)
-		self.qLoad = float(qLoad)
-		self.pGen = float(pGen)
-		self.qGen = float(qGen)
-		self.bsh = float(bsh)
-		self.gsh = float(gsh)
-
-# (2.8) Branch object {{{2
-# The branch object stores data for a particular branch of the system:
-#--> "fromBus" and "toBus" are the numbers of respectively the first and second buses attached to the branch.
-#--> "r"  and "x" are respectively the equivalent resistance and reactance of the branch.
-#--> "bsh" is the shunt susceptance of the branch according to the pi model
-#--> "a" is the turns ratio of the transformer attached to the branch when there is one.
-class branch:
-	def __init__(self,fromBus,toBus,neighbors,r,x,bsh,a):
-		self.fromBus = int(fromBus)
-		self.toBus = int(toBus)
-		self.r = float(r)
-		self.x = float(x)
-		self.bsh = float(bsh)
-		self.a = float(a)
-
-# (2.6) Generator object {{{2
-# The generator object stores the parameters of a given generator. Generators are modelled as synchronous machines:
-# --> "H" is the inertia constant of the machine, in p.u.;
-# --> "D" is the damping coefficient;
-# --> "ra" is the equivalent armature resistance;
-# --> "xL" is the rotor magnetizing reactance (aka static reactance)
-# --> "xq" and "xd" are the quadrature- and direct-axis static reactances of the rotor;
-# --> "xPq" and "xPd" are the quadrature- and direct-axis transient reactances of the rotor;
-# --> "xPPq" and "xPPd" are quadrature- and direct-axis sub-transient reactances of the rotor;
-# --> "tPqo" and "tPdo" are the rotor quadrature- and direct-axis transient time constants;
-# --> "tPPqo" and "tPPdo" are rotor quadrature- and direct-axis sub-transient time constants;
-class generator:
-	def __init__(self,branchNumber,ratedPower,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo):
-		self.ratedPower = ratedPower
-		self.H = H
-		self.D = D
-		self.ra = ra
-		self.xL = xL
-		self.xd = xd
-		self.xPd = xPd
-		self.xPPd = xPPd
-		self.tPdo = tPdo
-		self.tPPdo = tPPdo
-		self.xq = xq
-		self.xPq = xPq
-		self.xPPq = xPPq
-		self.tPqo = tPqo
-		self.tPPqo = tPPqo
-
-# (2.7) Fault object {{{2
-class fault:
-	def __init__(self,branch,location,openingTime):
-		self.branch = branch
-		self.location = location
-		self.openingTime = openingTime
-
 # -------------------------------------------------
 # (3) DESCRIBRING SYSTEM: READING FILE {{{1
 # -------------------------------------------------
 
-# loadcase is a function that takes the pointer to a file and returns a case structure (see (2.6)).
-# The structure is composed of bus, branch, generator and fault data, comprised of the lists of
-# buses, branches, generators and faults. Each of these have a particular set of attributes that
-# are explained in their respective object definitions.
-def loadCase(fileName):
-	printf(' --> Loading case file \'{0}\'...'.format(fileName))
-	with open(fileName,'r') as fileData:
+args = pA.parseArguments()
 
-		line = []
-		while line[0] ~= 'MVA base:': fileData.readline().strip().split('\t')
-		Sb = float(line[1])	# Extracting power base value
 
-		while line[0] ~= 'V base:': fileData.readline().strip().split('\t')
-		Vb = float(line[1])	# Extracting voltage base value
+case14 = lC.loadCase(14BusNet.txt)
 
-		# Bus data parameters ------------------------------------------
-		# Searching for bus data start card
-		while line[0] ~= 'BUS DATA FOLLOWS': line = fileData.readline().strip().split('\t')
-		fileData.readline()	# Skip the '---' line		
 
-		# Acquiring bus data
-		busList = []
-		while line[0] ~= '-999':
-			line = readtabline(fileData)
-			busList.append(bus(line[1],line[7]/Sb,line[8]/Sb,line[9]/Sb,line[10]/Sb,line[15],line[16]))
 
-		# Branch data parameters ---------------------------------------
-		# Searching for branch data start card
-		while line[0] ~= 'BRANCH DATA FOLLOWS':	line = fileData.readline().strip().split('\t')
-		fileData.readline()	# Skip the '---' line	
 
-		# Acquiring branch data
-		branchList = []	
-		while line[0] ~= '-999': branchList.append(branch(line[0],line[1],line[6],line[7],line[8],1/float(line[14])))
 
-		# Generator data parameters ------------------------------------
-		# Searching for generator data start card
-		while line[0]~= 'GENERATOR DATA FOLLOWS': line = fileData.readline().strip().split('\t')
-		fileData.readline()	# Skip the '---' line	
-
-		genList = []	# genList was named like so because there already is a genData variable in the program
-		while line[0] ~= '-999':
-			line = fileData.readline().strip().split('\t')
-			genList.append(generator(line[2],line[3],line[4],line[5],line[6],line[7],line[8],line[9],line[10],line[11],line[12],line[13],line[14],line[15],line[16]))
-		
-		# Fault data ---------------------------------------------------
-		# Searching for fault data start card 
-		while line[0] ~= 'FAULT DATA FOLLOWS': line = readtabline(fileData)
-		next(fileData)	# Skip the '---' line	
-
-		faultList = []	# As the same case with genList, faultList was named like so because there already is a faultData variable in the program
-		while line[0] ~= '-999':
-			line = readtabline(fileData)
-			faultList.append(fault( line[0], line[1], line[2])
-
-		print(' Done.')
-
-	return case(busList,branchList,genList,faultList,Sb,Vb)
-
-print('\n' + '-'*50 + '\n READING FILES \n' + '-'*50)
 
 # (3.1.5) Building Y matrix
 print('\n --> Building Y matrix... ',end='')
@@ -343,16 +135,13 @@ if powerflow or dyn:
 	numP = int(isP.sum())
 	numV = int(isV.sum())
 
-	# (3.5.2) DESCRIBING MEASUREMENT ARRAY Z = [P,Q,V].
-	if verbose > 1: pause('-'*50 + '\n DESCRIBING MEASURING ARRAY\n' + '-'*50)
-
 	if verbose > 1:
 		print('\n' + '-'*50 + '\n POWER FLOW FLAT START \n' + '-'*50)
 	else:
 		print('\n --> Beggining power flow calculations... ', end='')
 
 	if verbose > 1:
-		print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(mF.Jac(V,theta,K,a,y,Y,bsh,isP,isV),mF.h(V,theta,K,a,y,Y,bsh,isP,isV)))
+		print('\n --> J = \n{0}\n\n --> h = \n{1}'.format(mF.Jac(V,theta,K,a,y,Y,bsh,isP,isV), mF.h(V,theta,K,a,y,Y,bsh,isP,isV)))
 
 	# (5.2) Defining simulation parameters from the arguments passed to the script
 	absTol = args.tol

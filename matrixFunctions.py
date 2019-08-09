@@ -1,3 +1,14 @@
+# -------------------------------------------------
+# UNIVERSITY OF SAO PAULO
+# SÃO CARLOS SCHOOL OF ENGINEERING (EESC)
+# DEPARTMENT OF ELECTRICAL AND COMPUTER ENGINEERING (SEL)
+# TITLE: pyEPSim matrix functions library
+# AUTHOR: Álvaro Augusto "Gondolindrim" Volpato
+# DATE: 04/07/2018
+# VERSION: 1.3
+# DESCRIPTION: this file contains the matrix functions used to build the jacobian of the Newton-Raphson method of pyEPSim.
+# -------------------------------------------------
+
 import numpy as np
 norm = np.linalg.norm
 abs = np.absolute
@@ -254,25 +265,7 @@ def reduceGrid(Y,Yload,V,genData): #{{{1
 
 	return [Yred,C,D]
 
-def sm2d(x,t,C,D,Yred,V,pm,genData): #{{{1
-	nGen = genData.shape[0]
-	F = np.zeros(2*nGen)
-	for k in range(nGen):
-		F[2*k] = x[2*k+1]	# delta} = x[k]
-		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)]) - genData[k,3]*x[2*k+1] )/(2*genData[k,2])	# omega = x[k+1]
-
-	return F
-
-def sm2(x,t,C,D,Yred,V,pm,genData): #{{{1
-	nGen = genData.shape[0]
-	F = np.zeros(2*nGen)
-	for k in range(nGen):
-		F[2*k] = x[2*k+1]	# delta} = x[k]
-		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)]) )/(2*genData[k,2])	# omega = x[k+1]
-
-	return F
-
-# isGen tests if the bus number 'busN' is attached to a generator.
+# isGen tests if the bus number 'busN' is attached to a generator. {{{1
 def isGen(busN,genData):
 	flag = False
 	nGen = genData.shape[0]
