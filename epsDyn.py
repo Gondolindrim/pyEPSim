@@ -3,13 +3,16 @@
 # UNIVERSITY OF SAO PAULO
 # SÃO CARLOS SCHOOL OF ENGINEERING (EESC)
 # DEPARTMENT OF ELECTRICAL AND COMPUTER ENGINEERING (SEL)
-# AUTHOR: Álvaro Augusto Volpato
+# TITLE: pyEPSim, a Python dynamical simulator for Electric Power Systems.
+# AUTHOR: Álvaro Augusto "Gondolindrim" Volpato
 # DATE: 04/07/2018
-# VERSION: 5.0
+# VERSION: 5.1
 # DESCRIPTION: this program is a state estimator for an electric power system.
-# The program first tests for observability, restores it from available pseudo-measures if needed, and pro-
-# ceeds to find critical measurements. Next the program estimates the network's states through a Newton-
-# -Raphson method proposed in MONTICELLI(1995), and tests for normalized residue.
+# The program is designed to dynamically simulate an Electric Power System provided the descriptive files of the system through integration of its Algebraic-Differential equations.
+# BIBLIOGRAPHY:
+# [1] 
+# [2]
+# [3]
 # -------------------------------------------------
 
 # -------------------------------------------------
@@ -90,7 +93,7 @@ def readtabline(f): return f.readline().strip().split('\t')
 
 # (2.5) Arguments and options {{{2
 #	Creates arguments:
-#	--net [NETWORK FILE] is the target system network file. This string is stored in a 'networkFile' variable
+#	--net [NETWORK FILE] is the target system network file. This string is stored in a 'networkFile' variable. The network file describes the system topologically and parametrically: how many buses, which buses are connected to which, how many generators and how they are connected; the parameters of these generators, the faults applicable and their quality.
 parser.add_argument(	"net",
 			type = str,
 			metavar = 'NETFILE',
@@ -157,14 +160,31 @@ verbose = args.verbose[0]
 networkFile = args.net
 
 # (2.6) Case object {{{2
+# The case object stores data about a particular "case". "Cases" are a strain of data which comprise simulation parameters of a given system. These parameters include topological data like bus, branch and generator data and simulatory parameters, such as simulation time, plot data, tolerances et cetera. This object serves the purpose of giving the user an easy way to modify and customize the set of parameters -- be them topological or simulatory -- without having to generate a whole new file.
+# --> "busData" is a list of "bus" objects (see (2.7)), which store information about buses like injected power, load power, name, number;
+# --> "branchData" is a list of "branch" objects (see (2.8)) which store information about the branches of the system, such as resistance and reactance, transformer turns ratio and so on;
+# --> "genData" is a list of "generator" objects (see (2.9)) which sotre information about system generators. These generators are modelled as synchronous machines; the "generator" object sotres basically constructive parameters of the machines.
+# --> "faultData" is a list of "fault" objects (see (2.10)) which store information about possible faults in the system. The listed faults will be used for dynamical simulation.
 class case:
-	def __init__(self,busData,branchData,genData,faultData):
+	def __init__(self,busData,branchData,genData,faultData,Sb,Vb):
 		self.busData = busData
 		self.branchData = branchData
 		self.genData = genData
-		self.faultData = faultData
+		self.faultData = faultData	
+		self.Sb = Sb			# Base power value
+		self.Vb = Vb			# Base voltage value
 
 # (2.7) Bus object {{{2
+# The bus object stores data for a particular bus of the net:
+# --> "number" is the bus number in a list. This number can be user-attributed in the net-file,
+# but such numbers must be consecutive and have no gaps.
+# --> "name" is a human-readable name for that particular bus, so that the user can
+# distinguish buses by a name rather than their numbers.
+# --> "pLoad" and "qLoad" are respectively the active and reactive power that the bus exports as load.
+# These loads are further modelled in the algorithm by a constant impedance.
+# --> "pGen" and "qGen" are respectively the active and reactive power injected into the bus.
+# --> "gsh" and "bsh" are respectively the shunt conductance and susceptance attached to the bus. These
+# will be added to the pLoad and qLoad after these are converted to shunt impedances.
 class bus:
 	def __init__(self,number,name,pLoad,qLoad,pGen,qGen,gsh,bsh):
 		self.number = int(number)
@@ -177,6 +197,11 @@ class bus:
 		self.gsh = float(gsh)
 
 # (2.8) Branch object {{{2
+# The branch object stores data for a particular branch of the system:
+#--> "fromBus" and "toBus" are the numbers of respectively the first and second buses attached to the branch.
+#--> "r"  and "x" are respectively the equivalent resistance and reactance of the branch.
+#--> "bsh" is the shunt susceptance of the branch according to the pi model
+#--> "a" is the turns ratio of the transformer attached to the branch when there is one.
 class branch:
 	def __init__(self,fromBus,toBus,neighbors,r,x,bsh,a):
 		self.fromBus = int(fromBus)
@@ -187,6 +212,16 @@ class branch:
 		self.a = float(a)
 
 # (2.6) Generator object {{{2
+# The generator object stores the parameters of a given generator. Generators are modelled as synchronous machines:
+# --> "H" is the inertia constant of the machine, in p.u.;
+# --> "D" is the damping coefficient;
+# --> "ra" is the equivalent armature resistance;
+# --> "xL" is the rotor magnetizing reactance (aka static reactance)
+# --> "xq" and "xd" are the quadrature- and direct-axis static reactances of the rotor;
+# --> "xPq" and "xPd" are the quadrature- and direct-axis transient reactances of the rotor;
+# --> "xPPq" and "xPPd" are quadrature- and direct-axis sub-transient reactances of the rotor;
+# --> "tPqo" and "tPdo" are the rotor quadrature- and direct-axis transient time constants;
+# --> "tPPqo" and "tPPdo" are rotor quadrature- and direct-axis sub-transient time constants;
 class generator:
 	def __init__(self,branchNumber,ratedPower,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo):
 		self.ratedPower = ratedPower
@@ -216,6 +251,10 @@ class fault:
 # (3) DESCRIBRING SYSTEM: READING FILE {{{1
 # -------------------------------------------------
 
+# loadcase is a function that takes the pointer to a file and returns a case structure (see (2.6)).
+# The structure is composed of bus, branch, generator and fault data, comprised of the lists of
+# buses, branches, generators and faults. Each of these have a particular set of attributes that
+# are explained in their respective object definitions.
 def loadCase(fileName):
 	printf(' --> Loading case file \'{0}\'...'.format(fileName))
 	with open(fileName,'r') as fileData:
@@ -223,6 +262,9 @@ def loadCase(fileName):
 		line = []
 		while line[0] ~= 'MVA base:': fileData.readline().strip().split('\t')
 		Sb = float(line[1])	# Extracting power base value
+
+		while line[0] ~= 'V base:': fileData.readline().strip().split('\t')
+		Vb = float(line[1])	# Extracting voltage base value
 
 		# Bus data parameters ------------------------------------------
 		# Searching for bus data start card
@@ -266,7 +308,7 @@ def loadCase(fileName):
 
 		print(' Done.')
 
-	return case(busList,branchList,genList,faultList)
+	return case(busList,branchList,genList,faultList,Sb,Vb)
 
 print('\n' + '-'*50 + '\n READING FILES \n' + '-'*50)
 
