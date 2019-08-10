@@ -33,6 +33,7 @@ inv = np.linalg.inv
 sqrt = np.sqrt
 pi = np.pi
 
+# (1.2) Matplotlib {{{2
 import matplotlib.pyplot as pyplt
 from matplotlib import rc
 #rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
@@ -41,54 +42,35 @@ rc('font',**{'family':'serif','serif':['Palatino']})
 pyplt.rc('text', usetex=True)
 pyplt.rc('text.latex', preamble=r'\usepackage{xfrac}')
 
-# (1.2) SCIPY FOR LU DECOMPOSITION 
+# (1.2) Scipy for LU decomposition and ODE integration {{{2
 import scipy
 import scipy.linalg
 import scipy.integrate
 odeint = scipy.integrate.odeint
 LU = scipy.linalg.lu
 
-# (1.3) COPY library for temporary variable deep copy 
+# (1.3) COPY library for temporary variable deep copy {{{2
 from copy import deepcopy
 copy = deepcopy
 
-# (1.4) OS and SYS libraries for defining clear terminal command 
-import os
-import sys
-
-# (1.5) Time library: allows to count execution time 
+# (1.5) Time library: allows to count execution time  {{{2
 import time
 
-# (1.7) mF.Jacobian matrix functions
-import matrixFunctions as mF
+# (1.6) Jacobian matrix functions {{{2
+from libraries import matrixFunctions as mF
 
-# (1.8) Classes library
-import classes as cL
+# (1.8) Classes library {{{2
+from libraries import classes as cL
 
-import dynamicModels as dM
+from libraries import dynamicModels as dM
 
-import arguments as pA
+from libraries import arguments as pA
 
-import loadcase as lC
+from libraries import loadCase as lC
 
 # -------------------------------------------------
-# (2) CUSTOM FUNCTIONS, ARGUMENTS AND OBJECTS{{{1
-# -------------------------------------------------
-# (2.1) Set printout options: this allows the program printout to span the whole terminal {{{2
-np.set_printoptions(suppress=False,linewidth=999,threshold=999)
 
-# (2.2) Clear  function: clears the terminal. Similar to MATLAB's cls and bash's cls {{{2
-def clear(): os.system('cls' if os.name == 'nt' else 'clear')
 
-# (2.3) "pause" function: halts program execution and asks for enter {{{2
-def pause(string):
-    programPause = input(string)
-
-# (2.4) readtabline function {{{2
-# readtabline reads a line in a given file f then arranges it in an array which vectors are the strings
-#	in the line that are separated by the tab character '\t'. It also removes the new line '\n' character
-#	from the last slot in the line.
-def readtabline(f): return f.readline().strip().split('\t')
 
 # -------------------------------------------------
 # (3) DESCRIBRING SYSTEM: READING FILE {{{1
@@ -96,12 +78,9 @@ def readtabline(f): return f.readline().strip().split('\t')
 
 args = pA.parseArguments()
 
+netFile = args.net
 
-case14 = lC.loadCase(14BusNet.txt)
-
-
-
-
+case14 = lC.loadCase('case14.net')
 
 
 # (3.1.5) Building Y matrix
