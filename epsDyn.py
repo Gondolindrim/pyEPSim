@@ -67,7 +67,7 @@ import classes as cL
 
 import dynamicModels as dM
 
-import pyEPSim_args as pA
+import arguments as pA
 
 import loadcase as lC
 
