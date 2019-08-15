@@ -12,72 +12,128 @@
 # are explained in their respective object definitions.
 # -------------------------------------------------
 
-from libraries import classes as cL
+import numpy as np
 
+import libraries.classes as cL
+
+# dataCardError is a custom-created exception raised whenever a start or end card is not found.
 class dataCardError(Exception):
-	def __init__(self, msg):
-		self.code = msg
+	pass
+
+# dataCardSearch is a function that takes two arguments: a string 'dataCard' and a file object 'fileData'. The function searches the file for the dataCard string, sweeping the lines and separating them according to the \t character. 
+# The while loop breaks when the first block of the line is the dataCard or the data card is not found, in which case a dataCardError exception is raised and execution is halted.
+# If the data card was found, the function returns the pointer to the line where the dataCard was found.
+def dataCardSearch(dataCard,fileData):
+	while True:
+		line = fileData.readline().strip().split('\t')
+		if line[0] == dataCard: break
+		elif line[0] == '':
+			raise dataCardError(' --> Netfile error: \'{0}\' card was not found!'.format(dataCard))
+			break
+	return line
 
 def loadCase(fileName):
-	print(' --> Loading case file \'{0}\'...'.format(fileName))
+	print(' --> Loading case file \'{0}\'...'.format(fileName),end='')
+
+	caseid = 'Case {0}'.format(fileName)
+
 	with open(fileName,'r') as fileData:
 
 		line = [1]
 		while True:
+			line = fileData.readline().strip().split('\t')
+			if line[0] == 'Case id:':
+				caseid = line[1]	# Extracting power base value
+				break
+			elif line[0] == '':
+				raise dataCardError(' --> Netfile error: \'Case id\' data card was not found! Please define a case ID name for better clarity.')
+				break
+
+	with open(fileName,'r') as fileData:
+
+		line = [1]
+		while True:
+			line = fileData.readline().strip().split('\t')
 			if line[0] == 'MVA base:':
-				line = fileData.readline().strip().split('\t')
 				Sb = float(line[1])	# Extracting power base value
 				break
-			elif line == '':
-				break
+			elif line[0] == '':
 				raise dataCardError(' --> Netfile error: \'MVA base\' data card was not found! Please define a base power value in the netfile.')
+				break
 
 		while True:
+			line = fileData.readline().strip().split('\t')
 			if line[0] == 'Voltage base:':
-				line = fileData.readline().strip().split('\t')
 				Vb = float(line[1])	# Extracting voltage base value
-			elEOFError(' --> Netfile error: \'Voltage base\' card was not found! Please define a base voltage value in the netfile.')
+				break
+			elif line[0] == '':
+				raise dataCardError(' --> Netfile error: \'Voltage base\' card was not found! Please define a base voltage value in the netfile.')
+				break
 
 		# Bus data parameters ------------------------------------------
 		# Searching for bus data start card
-		while line[0] != 'BUS DATA FOLLOWS': line = fileData.readline().strip().split('\t')
+		line = dataCardSearch('BUS DATA FOLLOWS',fileData)
+		line = fileData.readline()	# Skip --- line
 
 		# Acquiring bus data
 		busList = []
 		while True:
 			line = fileData.readline().strip().split('\t')
 			if line[0] == '-999': break
+			elif line[0] == '':
+				raise dataCardError(' --> Netfile error: the endcard \'-999\' was not found when acquiring bus data')
+				break
 			else: busList.append(cL.bus( line[0], line[1], line[7], line[8], line[9], line[10], line[15], line[16]))
-		else: raise EOFError(' --> Netfile error: the endcard '-999' was not found when acquiring bus data')
+			
 			
 		# Branch data parameters ---------------------------------------
 		# Searching for branch data start card
-		while line[0] != 'BRANCH DATA FOLLOWS':	line = fileData.readline().strip().split('\t')
+		line = dataCardSearch('BRANCH DATA FOLLOWS',fileData)
+		line = fileData.readline()	# Skip --- line
 
-		# Acquiring branch data
 		branchList = []	
-		while line[0] != '-999': branchList.append(cL.branch(line[0],line[1],line[6],line[7],line[8],1/float(line[14])))
+		while True:
+			line = fileData.readline().strip().split('\t')
+			if line[0] == '-999': break
+			elif line[0] == '':
+				raise dataCardError(' --> Netfile error: the endcard \'-999\' was not found when acquiring branch data')
+				break
+			else:
+				if float(line[14]) != 0: branchList.append(cL.branch(line[0],line[1],line[6],line[7],line[8],1/float(line[14])))
+				else: branchList.append(cL.branch(line[0],line[1],line[6],line[7],line[8],0))
 
 		# Generator data parameters ------------------------------------
 		# Searching for generator data start card
-		while line[0]!= 'GENERATOR DATA FOLLOWS': line = fileData.readline().strip().split('\t')
-		fileData.readline()	# Skip the '---' line	
+		line = dataCardSearch('GENERATOR DATA FOLLOWS',fileData)
+		line = fileData.readline()	# Skip --- line
 
 		genList = []	# genList was named like so because there already is a genData variable in the program
-		while line[0] != '-999':
+		while True:
 			line = fileData.readline().strip().split('\t')
-			genList.append(cL.generator(line[2],line[3],line[4],line[5],line[6],line[7],line[8],line[9],line[10],line[11],line[12],line[13],line[14],line[15],line[16]))
+			if line[0] == '-999': break
+			elif line[0] == '':
+				raise dataCardError(' --> Netfile error: the endcard \'-999\' was not found when acquiring generator data')
+				break
+			else: genList.append(cL.generator(line[0],line[1],line[2],line[3],line[4],line[5],line[6],line[7],line[8],line[9],line[10],line[11],line[12],line[13],line[14],line[15]))			
 		
 		# Fault data ---------------------------------------------------
 		# Searching for fault data start card 
-		while line[0] != 'FAULT DATA FOLLOWS': line = fileData.readline().strip().split('\t')
-		next(fileData)	# Skip the '---' line	
+		line = dataCardSearch('FAULT DATA FOLLOWS',fileData)
+		line = fileData.readline()	# Skip --- line
 
 		faultList = []	# As the same case with genList, faultList was named like so because there already is a faultData variable in the program
-		while line[0] != '-999':
+
+		while True:
 			line = fileData.readline().strip().split('\t')
-			faultList.append(cL.fault( line[0], line[1], line[2]))
+			if line[0] == '-999': break
+			elif line[0] == '':
+				raise dataCardError(' --> Netfile error: the endcard \'-999\' was not found when acquiring fault data')
+				break
+			else: faultList.append(cL.fault( line[0], line[1], line[2]))			
 
 		print(' Done.')
 
-	return case(busList,branchList,genList,faultList,Sb,Vb)
+	case = cL.case(caseid,busList,branchList,genList,faultList,Sb,Vb)
+	case.updateMatrixes()
+
+	return case
