@@ -6,7 +6,7 @@
 # AUTHOR: Álvaro Augusto "Gondolindrim" Volpato
 # DATE: 04/07/2018
 # VERSION: 1.0
-# DESCRIPTION: this file describes the arguments that can be passed to pyEPSim
+# DESCRIPTION: this file describes the arguments that can be passed to pyEPSim.
 # -------------------------------------------------
 
 from libraries import misc_functions as miscF
@@ -31,9 +31,9 @@ def parseArguments():
 	parser.add_argument(	'--verbose', '-v',
 				type = int,
 				choices = [0,1,2],
-				default = [1],
+				default = [0],
 				nargs = 1,
-				help = 'Verbose level. 0 for no output, 1 for critical output, 2 for detailed output. Default is 1.')
+				help = 'Verbose level. 0 for no output, 1 for critical output, 2 for detailed output. Default is 0.')
 
 	# CLEAR option
 	parser.add_argument(	'--cls',

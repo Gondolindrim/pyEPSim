@@ -1,0 +1,3 @@
+[submodule "libraries/tabulate"]
+	path = libraries/tabulate
+	url = https://bitbucket.org/astanin/python-tabulate/

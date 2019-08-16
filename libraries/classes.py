@@ -26,6 +26,8 @@ pi = np.pi
 from copy import deepcopy
 copy = deepcopy
 
+from libraries.tabulate.tabulate import tabulate
+
 # (1) Case object {{{1
 # The case object stores data about a particular "case". "Cases" are a strain of data which comprise simulation parameters of a given system. These parameters include topological data like bus, branch and generator data and simulatory parameters, such as simulation time, plot data, tolerances et cetera. This object serves the purpose of giving the user an easy way to modify and customize the set of parameters -- be them topological or simulatory -- without having to generate a whole new file. In general, a case file is built from a *.net supplied by the user; see the loadCase function in file loadCase.py
 # --> "name" is a human-readable name that can be remembered by the user;
@@ -36,7 +38,7 @@ copy = deepcopy
 # These quantities are defined in the class creation; that is, when a case instance is created, these parameters need to be informed. In general, these quantities will be declared in a net file (*.net) and the file is loaded through the loadCase funtion in loadCase.py . Apart from these values, there are other constructive/topological parameters of the system that must be taken in place. The numerical method uses matrixes and not classes to perform calculations; these matrixes have to be constructed from the case parameters. The matrixe are explained below.
 # --> z is a matrix defining the branch impedances; z[m,n] is the branch impedance from bus m to bus n; if buses m or n are not connected, then z[m,n] is zero. Also, z has a null main diagonal.
 # --> y is the element-wise inverse of z; g being its real part, b its imaginary.
-# --> bsh is the matrix of shunt capacitances between buses; 
+# --> bsh is the matrix of shunt capacitances between buses; bsh[m,n] is the shunt capacitance of line between buses m and n (zero if m and n are not neighbors); bsh[k,k] is the shunt capacitance of bus k.
 # --> Y is the multi-dimensional thevenin equivalent susceptance of the grid.
 
 class case:
@@ -50,25 +52,39 @@ class case:
 		self.Vb = Vb			# Base voltage value
 
 		self.nBus = len(self.busData)
-		self.r, self.x, self.a, self.bsh, self.K  = self.updateMatrixes()
-		
+
+		self.r, self.x, self.a, self.bsh, self.K  = self.updateMatrixes()		
 		self.z = array([[self.r[m,n] + 1j*self.x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
 		self.y = array([[1/self.z[m,n] if self.z[m,n] != 0 else 0 for m in range(self.nBus)] for n in range(self.nBus)])
 		self.g = real(copy(self.y))
 		self.b = imag(copy(self.y))
 		self.bsh = array([[ self.bsh[m,n]/2 if m!=n else self.bsh[m,n] for n in range(self.nBus)] for m in range(self.nBus)])
 
-		self.Y = -self.a*transpose(self.a)*self.y + np.diag( [ 1j*self.bsh[k,k] + sum([self.a[k,m]**2*self.y[k,m] + 1j*self.bsh[k,m] for m in self.K[k]]) for k in range(self.nBus)] )
+		self.Y = self.buildY();
 		self.B = imag(copy(self.Y))
-		self.G = real(copy(self.Y))	
+		self.G = real(copy(self.Y))
 
-	# Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
-	# case.branchData[1].r = 5
-	# In this case the user has directly updated the value of a branch resistance; all matrixes must be re-calculated. Function updateMatrixes is called whenever case.r, case.x, case.a, case.bsh, case.K are called, so they are recalculated for the present values of bus and branch data.
+	def __str__(self,**kwargs):
+		# absTol is the absolute tolerance used by the method
+		if ('verbose' in kwargs): verbose = kwargs['absTol']
+		else: verbose = 0
+
+		print(' --> Printing case \'{0}\' data:'.format(self.name))
+		print('\n >> Bus list')
+		self.printBusData()
+		print('\n\n >> Branch list')
+		self.printBranchData()
+
+		return ''
+
+
+# Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
+# case.branchData[1].r = 5
+# In this case the user has directly updated the value of a branch resistance; all matrixes must be re-calculated. Function updateMatrixes is called whenever case.r, case.x, case.a, case.bsh, case.K are called, so they are recalculated for the present values of bus and branch data.
 	def updateMatrixes(self):
 		r = np.zeros((self.nBus,self.nBus))
 		x = np.zeros((self.nBus,self.nBus))
-		a = np.zeros((self.nBus,self.nBus))
+		a = np.ones((self.nBus,self.nBus))
 		bsh = np.zeros((self.nBus,self.nBus))
 		K = [ [] for i in range(self.nBus)]
 		
@@ -85,9 +101,35 @@ class case:
 			bsh[branch.fromBus-1,branch.toBus-1] = branch.bsh	
 			bsh[branch.toBus-1,branch.fromBus-1] = branch.bsh
 
-			a[branch.fromBus-1,branch.toBus-1] = branch.a
+			if branch.a != 0: a[branch.fromBus-1,branch.toBus-1] = branch.a
+
+		for k in range(self.nBus):
+			bsh[k,k] = self.busData[k].bsh
 
 		return r,x,a,bsh,K
+
+	def buildY(self):
+		Y = -self.a*transpose(self.a)*self.y
+		for k in range(self.nBus): Y[k,k] = 1j*self.bsh[k,k] + sum([self.a[k,m]**2*self.y[k,m] + 1j*self.bsh[k,m] for m in self.K[k]])
+		return Y
+
+	def printBusData(self):
+		tabRows = []
+		tabHeader = ['Number', 'Name', 'Active Load', 'Reactive Load', 'Active Generation', 'Reactive Generation', 'Shunt capacitance bsh', 'Shunt conductance gsh']
+		for bus in self.busData:
+			tabRows.append([bus.number, bus.name, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh ])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
+
+	def printBranchData(self):
+		tabRows = []
+		tabHeader = ['From Bus', 'To Bus', 'Resistance (r)', 'Reactance (x)', 'Shunt susceptance (bsh)', 'Transformer turns ratio (a)']
+		for branch in self.branchData:
+			tabRows.append([branch.fromBus, branch.toBus, branch.r, branch.x, branch.bsh, branch.a])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
+
+		
 
 # (2) Bus object {{{1
 # The bus object stores data for a particular bus of the net:

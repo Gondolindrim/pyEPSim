@@ -5,7 +5,7 @@
 # TITLE: loadCase function
 # AUTHOR: Álvaro Augusto "Gondolindrim" Volpato
 # DATE: 04/07/2018
-# VERSION: 1.2
+# VERSION: 1.2.1
 # DESCRIPTION: # loadcase is a function that takes the pointer "fileName" to a file and returns a case structure (see (2.6)).
 # The structure is composed of bus, branch, generator and fault data, comprised of the lists of
 # buses, branches, generators and faults. Each of these have a particular set of attributes that
@@ -35,7 +35,7 @@ def dataCardSearch(dataCard,fileData):
 def loadCase(fileName):
 	print(' --> Loading case file \'{0}\'...'.format(fileName),end='')
 
-	caseid = 'Case {0}'.format(fileName)
+	caseID = 'Case {0}'.format(fileName)
 
 	with open(fileName,'r') as fileData:
 
@@ -43,7 +43,7 @@ def loadCase(fileName):
 		while True:
 			line = fileData.readline().strip().split('\t')
 			if line[0] == 'Case id:':
-				caseid = line[1]	# Extracting power base value
+				caseID = line[1]	# Extracting power base value
 				break
 			elif line[0] == '':
 				raise dataCardError(' --> Netfile error: \'Case id\' data card was not found! Please define a case ID name for better clarity.')
@@ -133,7 +133,7 @@ def loadCase(fileName):
 
 		print(' Done.')
 
-	case = cL.case(caseid,busList,branchList,genList,faultList,Sb,Vb)
+	case = cL.case(caseID,busList,branchList,genList,faultList,Sb,Vb)
 	case.updateMatrixes()
 
 	return case
