@@ -63,7 +63,7 @@ tabRows = []
 for bus in case14.busData:
 	tabRows.append([bus.name, bus.number, V[bus.number-1], theta[bus.number-1]])
 	
-resultsTable = tabulate(tabRows,headers=tabHeaders)
+resultsTable = tabulate(tabRows,headers=tabHeaders,tablefmt='psql')
 
 # (6.13) Printing convergence results
 if success:

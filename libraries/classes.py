@@ -65,19 +65,50 @@ class case:
 		self.G = real(copy(self.Y))
 
 	def __str__(self,**kwargs):
-		# absTol is the absolute tolerance used by the method
 		if ('verbose' in kwargs): verbose = kwargs['absTol']
 		else: verbose = 0
 
+		# tableFormat is the string that dictates the final table output format. It is derived from the formats of the dependency python-tabulate. See the documentation at the "table format" chapter.		
+		if ('tableformat' in kwargs): tFormat = kwargs['tableformat']
+		else: tableformat = 'psql' 
+
 		print(' --> Printing case \'{0}\' data:'.format(self.name))
+		
+		# PRINTING BUS DATA ------------------------
 		print('\n >> Bus list')
-		self.printBusData()
+		tabRows = []
+		tabHeader = ['Number', 'Name', 'Active Load (pLoad)', 'Reactive Load (qLoad)', 'Active Generation (pGer)', 'Reactive Generation (qGer)', 'Shunt capacitance (bsh)', 'Shunt conductance (gsh)']
+		for bus in self.busData:
+			tabRows.append([bus.number, bus.name, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh ])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
+
+		# PRINTING BRANCH DATA ---------------------
 		print('\n\n >> Branch list')
-		self.printBranchData()
+		tabRows = []
+		tabHeader = ['From Bus', 'To Bus', 'Resistance (r)', 'Reactance (x)', 'Shunt susceptance (bsh)', 'Transformer turns ratio (a)']
+		for branch in self.branchData:
+			tabRows.append([branch.fromBus, branch.toBus, branch.r, branch.x, branch.bsh, branch.a])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
+
+		# PRINTING GENERATOR DATA ------------------
 		print('\n\n >> Generator list')
-		self.printGeneratorData()
+		tabRows = []
+		tabHeader = ['Bus Number', 'Rated Power', 'H', 'D', 'ra', 'xL', 'xd', 'xPd', 'xPPd', 'tPdo', 'tPPdo', 'xq', 'xPq', 'xPPq', 'tPqo', 'tPPqo']
+		for gen in self.genData:
+			tabRows.append([gen.busNumber, gen.ratedPower,gen.H, gen.D, gen.ra, gen.xL, gen.xd, gen.xPd, gen.xPPd, gen.tPdo, gen.tPPdo, gen.xq, gen.xPq, gen.xPPq, gen.tPqo, gen.tPPqo])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))	
+
+		# PRINTING FAULT DATA ----------------------
 		print('\n\n >> Possible faults list')
-		self.printFaultData()
+		tabRows = []
+		tabHeader = ['Branch Number', 'Location', 'Opening Time']
+		for fault in self.faultData:
+			tabRows.append([fault.branch, fault.location, fault.openingTime])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
 		return ''
 
@@ -115,41 +146,7 @@ class case:
 	def buildY(self):
 		Y = -self.a*transpose(self.a)*self.y
 		for k in range(self.nBus): Y[k,k] = 1j*self.bsh[k,k] + sum([self.a[k,m]**2*self.y[k,m] + 1j*self.bsh[k,m] for m in self.K[k]])
-		return Y
-
-	def printBusData(self):
-		tabRows = []
-		tabHeader = ['Number', 'Name', 'Active Load (pLoad)', 'Reactive Load (qLoad)', 'Active Generation (pGer)', 'Reactive Generation (qGer)', 'Shunt capacitance (bsh)', 'Shunt conductance (gsh)']
-		for bus in self.busData:
-			tabRows.append([bus.number, bus.name, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh ])
-
-		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
-
-	def printBranchData(self):
-		tabRows = []
-		tabHeader = ['From Bus', 'To Bus', 'Resistance (r)', 'Reactance (x)', 'Shunt susceptance (bsh)', 'Transformer turns ratio (a)']
-		for branch in self.branchData:
-			tabRows.append([branch.fromBus, branch.toBus, branch.r, branch.x, branch.bsh, branch.a])
-
-		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
-
-	def printGeneratorData(self):
-		tabRows = []
-		tabHeader = ['Bus Number', 'Rated Power', 'H', 'D', 'ra', 'xL', 'xd', 'xPd', 'xPPd', 'tPdo', 'tPPdo', 'xq', 'xPq', 'xPPq', 'tPqo', 'tPPqo']
-		for gen in self.genData:
-			tabRows.append([gen.busNumber, gen.ratedPower,gen.H, gen.D, gen.ra, gen.xL, gen.xd, gen.xPd, gen.xPPd, gen.tPdo, gen.tPPdo, gen.xq, gen.xPq, gen.xPPq, gen.tPqo, gen.tPPqo])
-
-		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
-
-	def printFaultData(self):
-		tabRows = []
-		tabHeader = ['Branch Number', 'Location', 'Opening Time']
-		for fault in self.faultData:
-			tabRows.append([fault.branch, fault.location, fault.openingTime])
-
-		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
-
-		
+		return Y		
 
 # (2) Bus object {{{1
 # The bus object stores data for a particular bus of the net:
