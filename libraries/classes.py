@@ -28,6 +28,8 @@ copy = deepcopy
 
 from libraries.tabulate.tabulate import tabulate
 
+import libraries.powerFlow as pF
+
 # (1) Case object {{{1
 # The case object stores data about a particular "case". "Cases" are a strain of data which comprise simulation parameters of a given system. These parameters include topological data like bus, branch and generator data and simulatory parameters, such as simulation time, plot data, tolerances et cetera. This object serves the purpose of giving the user an easy way to modify and customize the set of parameters -- be them topological or simulatory -- without having to generate a whole new file. In general, a case file is built from a *.net supplied by the user; see the loadCase function in file loadCase.py
 # --> "name" is a human-readable name that can be remembered by the user;
@@ -68,7 +70,7 @@ class case:
 		if ('verbose' in kwargs): verbose = kwargs['absTol']
 		else: verbose = 0
 
-		# tableFormat is the string that dictates the final table output format. It is derived from the formats of the dependency python-tabulate. See the documentation at the "table format" chapter.		
+		# tableFormat is the string that dictates the final table output format. It is derived from the formats of the dependency python-tabulate. See the documentation at the "table format" chapter.	
 		if ('tableformat' in kwargs): tFormat = kwargs['tableformat']
 		else: tableformat = 'psql' 
 
@@ -77,9 +79,9 @@ class case:
 		# PRINTING BUS DATA ------------------------
 		print('\n >> Bus list')
 		tabRows = []
-		tabHeader = ['Number', 'Name', 'Active Load (pLoad)', 'Reactive Load (qLoad)', 'Active Generation (pGer)', 'Reactive Generation (qGer)', 'Shunt capacitance (bsh)', 'Shunt conductance (gsh)']
+		tabHeader = ['Number', 'Name', 'Active Load (pLoad)', 'Reactive Load (qLoad)', 'Active Generation (pGer)', 'Reactive Generation (qGer)', 'Shunt capacitance (bsh)', 'Shunt conductance (gsh)', 'Final voltage (p.u.)', 'Final angle (rad)']
 		for bus in self.busData:
-			tabRows.append([bus.number, bus.name, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh ])
+			tabRows.append([bus.number, bus.name, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle ])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -111,6 +113,16 @@ class case:
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
 		return ''
+
+	# runPowerFlow() runs the power flow of the case and updates the finalVoltage and finalAngle attributes of the bus instances in the busData list. If the power flow method is not successful it returns a false value.
+	def runPowerFlow(self):
+		V, theta, r, elapsed, itCount, success = pF.powerFlow(self)
+		if not success:
+			print(' >>> Power flow update for case class instance returned not successful.')
+			V, theta = 'None'*self.nBus
+
+		for k in range(self.nBus): self.busData[k].finalVoltage, self.busData[k].finalAngle = V[k], theta[k]
+		
 
 
 # Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
@@ -159,8 +171,9 @@ class case:
 # --> "pGen" and "qGen" are respectively the active and reactive power injected into the bus.
 # --> "gsh" and "bsh" are respectively the shunt conductance and susceptance attached to the bus. These
 # will be added to the pLoad and qLoad after these are converted to shunt impedances.
+# --> "finalVoltage" and "finalAngle" are the calculated (through power flow or state estimation) voltage and angle of the bus. These parameters are optional key arguments that do not need to be given when the instance is created; in this case, they assume the 1 and 0 values ("flat start"). These values can be changed directly or through the runPowerFlow() method in the case class.
 class bus:
-	def __init__(self,number,name,pLoad,qLoad,pGen,qGen,gsh,bsh):
+	def __init__(self,number,name,pLoad,qLoad,pGen,qGen,gsh,bsh,finalVoltage = None, finalAngle = None):
 		self.number = int(number)
 		self.name = str(name)
 		self.pLoad = float(pLoad)
@@ -169,6 +182,9 @@ class bus:
 		self.qGen = float(qGen)
 		self.bsh = float(bsh)
 		self.gsh = float(gsh)
+
+		self.finalVoltage = 1 if finalVoltage is None else finalVoltage
+		self.finalAngle = 0 if finalAngle is None else finalAngle
 
 # (3) Branch object {{{1
 # The branch object stores data for a particular branch of the system:
