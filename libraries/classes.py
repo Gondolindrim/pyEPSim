@@ -54,6 +54,7 @@ class case:
 		self.Vb = Vb			# Base voltage value
 
 		self.nBus = len(self.busData)
+		self.nGen = len(self.genData)
 
 		self.r, self.x, self.a, self.bsh, self.K  = self.updateMatrixes()		
 		self.z = array([[self.r[m,n] + 1j*self.x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
@@ -149,10 +150,74 @@ class case:
 
 		return r,x,a,bsh,K
 
+# Method case.buildY builds the admittance matrix Y of the system
 	def buildY(self):
 		Y = -self.a*transpose(self.a)*self.y
 		for k in range(self.nBus): Y[k,k] = 1j*self.bsh[k,k] + sum([self.a[k,m]**2*self.y[k,m] + 1j*self.bsh[k,m] for m in self.K[k]])
-		return Y		
+		return Y	
+
+# isGen(busN) returns True if the bus with number busN has a generator attached to it.
+	def isGen(self,busN):
+		for gen in self.genData:
+			if int(gen.busNumber) == busN:
+				return True
+
+		return False
+
+# The 'reduceMatrixes' method returns the matrixes of the reduced system. In order to do this, the system will need to be reorganized so that the buses attached to a generator are numbered first. Since this method alters the sequence of buses (that is, it reorganizes the number of the buses), it is recommended that this method be run through a copied instance, that is, run 'reducedCase = copy(case)' and then 'reducedCase.reduceGrid()'. Although this may seem like a problem, given that the user will not know which buses were re-numbered, the bus names defined won'be altered, meaning that the human-readable names do not change. This ultimately means that it is imperative to give each bus a human-readable name. 
+	def reduceMatrixes(self):#(Y,Yload,V,genData): #{{{1
+		nBus = self.nBus
+		nGen = self.nGen
+
+		# Obtaining the bus number permutation matrix through an equivalence matrix. Equiv is a nGen x 2 matrix where n is the generator number. The first column are the 'old' bus numbers and the second is the 'new' bus numbers; that way, each line shows an equivalence between the old and the new bus numbers.
+		equiv = array([ i for i in range(nBus)])
+
+		for i in range(nBus):
+			for k in range(i):
+				if not self.isGen(equiv[k]) and self.isGen(equiv[i]):
+					temp = equiv[k]
+					equiv[k] = equiv[i]
+					equiv[i] = temp
+					break
+
+		# Debugging the permutation algorithm
+		print(equiv)
+		print([self.isGen(number) for number in equiv])
+		# Building component matrixes
+
+		Y1 = self.Y[0 : nGen, 0 : nGen]
+		Y2 = self.Y[0 : nGen , nGen : nBus+1]
+		Y3 = self.Y[nGen : nBus , 0 : nGen]
+		Y4 = self.Y[nGen : nBus+1 , nGen : nBus+1]
+
+		YLoad = [(bus.pLoad - 1j*bus.qLoad)/bus.finalVoltage**2 for bus in self.busData]	# YLoad is the equivalent conductance load matrix. Each load is modelled as a constant impedance
+
+		Ylg = np.diag(Yload[0:nGen])
+
+		Yll = np.diag(Yload[nGen:nBus])
+
+		Ytrans = np.array([1/(gen.ra + 1j*gen.xPq) for gen in self.genData]) # Y' no livro
+		Ytrans = np.diag(Ytrans)
+		
+		YA = Ytrans
+
+		YB = conc((-Ytrans,np.zeros((nGen,nBus-nGen))),axis=1)
+		
+		YC = conc((-Ytrans,np.zeros((nBus-nGen,nGen))),axis=0)
+
+		YDtop = conc((Ytrans+Y1+Ylg,Y2),axis=1)
+		YDbot = conc((Y3,Y4 + Yll),axis=1)
+
+		YD = conc((YDtop,YDbot),axis=0)
+
+		# Calculating YRED and C and D coefficients
+
+		Yred = YA - YB @ inv(YD) @ YC
+		V = array([ bus.finalVoltage for bus in self.busData])
+		C = np.array([ [ V[i]*V[j]*imag(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
+		D = np.array([ [ V[i]*V[j]*real(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
+
+		return [Yred,C,D]
 
 # (2) Bus object {{{1
 # The bus object stores data for a particular bus of the net:
@@ -208,22 +273,22 @@ class branch:
 # --> "tPPqo" and "tPPdo" are rotor quadrature- and direct-axis sub-transient time constants;
 class generator:
 	def __init__(self,busNumber,ratedPower,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo):
-		self.busNumber = busNumber
-		self.ratedPower = ratedPower
-		self.H = H
-		self.D = D
-		self.ra = ra
-		self.xL = xL
-		self.xd = xd
-		self.xPd = xPd
-		self.xPPd = xPPd
-		self.tPdo = tPdo
-		self.tPPdo = tPPdo
-		self.xq = xq
-		self.xPq = xPq
-		self.xPPq = xPPq
-		self.tPqo = tPqo
-		self.tPPqo = tPPqo
+		self.busNumber = int(busNumber)
+		self.ratedPower = float(ratedPower)
+		self.H = float(H)
+		self.D = float(D)
+		self.ra = float(ra)
+		self.xL = float(xL)
+		self.xd = float(xd)
+		self.xPd = float(xPd)
+		self.xPPd = float(xPPd)
+		self.tPdo = float(tPdo)
+		self.tPPdo = float(tPPdo)
+		self.xq = float(xq)
+		self.xPq = float(xPq)
+		self.xPPq = float(xPPq)
+		self.tPqo = float(tPqo)
+		self.tPPqo = float(tPPqo)
 
 # (5) Fault object {{{1
 class fault:

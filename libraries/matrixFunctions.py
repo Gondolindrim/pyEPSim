@@ -223,55 +223,8 @@ def Jac(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 	
 	return conc((dPdQ,O),axis=0)
 
-def reduceGrid(Y,Yload,V,genData): #{{{1
-	nGen = genData.shape[0]
-	nBus = Y.shape[0]
 
-	# Building component matrixes
-
-	Y1 = Y[0:nGen,0:nGen]
-	Y2 = Y[0:nGen,nGen:nBus+1]
-	Y3 = Y[nGen:nBus,0:nGen]
-	Y4 = Y[nGen:nBus+1,nGen:nBus+1]
-
-	Ylg = np.diag(Yload[0:nGen])
-
-	Yll = np.diag(Yload[nGen:nBus])
-
-	Ytrans = np.array([1/(data[4] + 1j*data[12]) for data in genData]) # Y' no livro
-	Ytrans = np.diag(Ytrans)
-	
-	YA = Ytrans
-
-	YB = conc((-Ytrans,np.zeros((nGen,nBus-nGen))),axis=1)
-	
-	YC = conc((-Ytrans,np.zeros((nBus-nGen,nGen))),axis=0)
-
-	YDtop = conc((Ytrans+Y1+Ylg,Y2),axis=1)
-	YDbot = conc((Y3,Y4 + Yll),axis=1)
-
-	YD = conc((YDtop,YDbot),axis=0)
-
-	# Calculating YRED and C and D coefficients
-
-	Yred = YA - YB @ inv(YD) @ YC
-
-	C = np.zeros((nGen,nGen))
-	D = np.zeros((nGen,nGen))
-
-	C = np.array([ [ V[i]*V[j]*imag(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
-	D = np.array([ [ V[i]*V[j]*real(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
-
-
-	return [Yred,C,D]
 
 # isGen tests if the bus number 'busN' is attached to a generator. {{{1
 def isGen(busN,genData):
-	flag = False
-	nGen = genData.shape[0]
-	for k in range(nGen):
-		if genData[k,0]-1 == busN:
-			flag = True
-			break
 
-	return flag

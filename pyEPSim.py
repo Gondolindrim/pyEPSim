@@ -50,6 +50,4 @@ netFile = args.net
 
 case14 = lC.loadCase(netFile)
 
-print(case14)
-	
-V, theta, r, elapsed, itCount, success = pF.powerFlow(case14,verbose=1)
+case14.reduceMatrixes()
