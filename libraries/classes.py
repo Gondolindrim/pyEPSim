@@ -76,6 +76,8 @@ class case:
 		self.printBranchData()
 		print('\n\n >> Generator list')
 		self.printGeneratorData()
+		print('\n\n >> Possible faults list')
+		self.printFaultData()
 
 		return ''
 
@@ -136,6 +138,14 @@ class case:
 		tabHeader = ['Bus Number', 'Rated Power', 'H', 'D', 'ra', 'xL', 'xd', 'xPd', 'xPPd', 'tPdo', 'tPPdo', 'xq', 'xPq', 'xPPq', 'tPqo', 'tPPqo']
 		for gen in self.genData:
 			tabRows.append([gen.busNumber, gen.ratedPower,gen.H, gen.D, gen.ra, gen.xL, gen.xd, gen.xPd, gen.xPPd, gen.tPdo, gen.tPPdo, gen.xq, gen.xPq, gen.xPPq, gen.tPqo, gen.tPPqo])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
+
+	def printFaultData(self):
+		tabRows = []
+		tabHeader = ['Branch Number', 'Location', 'Opening Time']
+		for fault in self.faultData:
+			tabRows.append([fault.branch, fault.location, fault.openingTime])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
 
