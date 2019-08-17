@@ -74,6 +74,8 @@ class case:
 		self.printBusData()
 		print('\n\n >> Branch list')
 		self.printBranchData()
+		print('\n\n >> Generator list')
+		self.printGeneratorData()
 
 		return ''
 
@@ -115,7 +117,7 @@ class case:
 
 	def printBusData(self):
 		tabRows = []
-		tabHeader = ['Number', 'Name', 'Active Load', 'Reactive Load', 'Active Generation', 'Reactive Generation', 'Shunt capacitance bsh', 'Shunt conductance gsh']
+		tabHeader = ['Number', 'Name', 'Active Load (pLoad)', 'Reactive Load (qLoad)', 'Active Generation (pGer)', 'Reactive Generation (qGer)', 'Shunt capacitance (bsh)', 'Shunt conductance (gsh)']
 		for bus in self.busData:
 			tabRows.append([bus.number, bus.name, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh ])
 
@@ -126,6 +128,14 @@ class case:
 		tabHeader = ['From Bus', 'To Bus', 'Resistance (r)', 'Reactance (x)', 'Shunt susceptance (bsh)', 'Transformer turns ratio (a)']
 		for branch in self.branchData:
 			tabRows.append([branch.fromBus, branch.toBus, branch.r, branch.x, branch.bsh, branch.a])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
+
+	def printGeneratorData(self):
+		tabRows = []
+		tabHeader = ['Bus Number', 'Rated Power', 'H', 'D', 'ra', 'xL', 'xd', 'xPd', 'xPPd', 'tPdo', 'tPPdo', 'xq', 'xPq', 'xPPq', 'tPqo', 'tPPqo']
+		for gen in self.genData:
+			tabRows.append([gen.busNumber, gen.ratedPower,gen.H, gen.D, gen.ra, gen.xL, gen.xd, gen.xPd, gen.xPPd, gen.tPdo, gen.tPPdo, gen.xq, gen.xPq, gen.xPPq, gen.tPqo, gen.tPPqo])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right'))
 
@@ -181,7 +191,7 @@ class branch:
 # --> "tPPqo" and "tPPdo" are rotor quadrature- and direct-axis sub-transient time constants;
 class generator:
 	def __init__(self,busNumber,ratedPower,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo):
-		self.branchNumber = busNumber
+		self.busNumber = busNumber
 		self.ratedPower = ratedPower
 		self.H = H
 		self.D = D
