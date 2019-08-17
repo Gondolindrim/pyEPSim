@@ -115,12 +115,10 @@ class case:
 		V, theta, r, elapsed, itCount, success = pF.powerFlow(self)
 		if not success:
 			print(' >>> Power flow update for case class instance returned not successful.')
-			V, theta = 'None'*self.nBus
+			V, theta = array(['None']*self.nBus), array(['None']*self.nBus),
 
 		for k in range(self.nBus): self.busData[k].finalVoltage, self.busData[k].finalAngle = V[k], theta[k]
 		
-
-
 # Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
 # case.branchData[1].r = 5
 # In this case the user has directly updated the value of a branch resistance; all matrixes must be re-calculated. Function updateMatrixes is called whenever case.r, case.x, case.a, case.bsh, case.K are called, so they are recalculated for the present values of bus and branch data.
