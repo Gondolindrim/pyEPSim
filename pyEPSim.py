@@ -25,19 +25,18 @@ __status__ = "Development"
 # (1) IMPORTING LIBRARIES  {{{1
 # -------------------------------------------------
 
+# Numpy printopt so that the console does not limit the output column number
 import numpy as np
-desired_width = 999
-np.set_printoptions(linewidth=desired_width)
+np.set_printoptions(linewidth=999)
 
-# (1.8) Loading 
+# Loading libraries
 import libraries.classes as cL		# classes.py contains the bus, branch, generator and case classes
 import libraries.arguments as pA	# arguments.py contains the available arguments passed to the program
 import libraries.loadCase as lC		# loadCase.py contains the case-loading routine which reads the net file
 import libraries.powerFlow as pF	# powerFlow.py contains the Newton-Raphson method used for power flow calculation.
 
+# Importing tabulate dependency for pretty tabular prints
 from libraries.tabulate.tabulate import tabulate
-
-from libraries.color import color as color
 
 # -------------------------------------------------
 
@@ -53,5 +52,4 @@ case14 = lC.loadCase(netFile)
 
 print(case14)
 	
-
-V, theta, r, elapsed, itCount, success = pF.powerFlow(case14,deltaMax=100,verbose=1)
+V, theta, r, elapsed, itCount, success = pF.powerFlow(case14,verbose=1)
