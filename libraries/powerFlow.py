@@ -22,6 +22,7 @@ import time
 import libraries.classes as cL			# classes.py contains the bus, branch, generator and case classes
 from libraries import matrixFunctions as mF	# Contains the matrix functions used to compute the Jacobian
 
+# Tabulate for pretty tabular console output
 from libraries.tabulate.tabulate import tabulate
 
 def powerFlow(case,**kwargs):
@@ -39,6 +40,9 @@ def powerFlow(case,**kwargs):
 	else: maxIter = 10
 
 	# Information print level.
+	# If verbose is 0, no output is given. This is the default level.
+	# If 1, the results are output at the end of the method.
+	# If 2, each iteration result is displayed and program is paused ultil a key is pressed.
 	if ('verbose' in kwargs): verbose = kwargs['verbose']
 	else: verbose = 0
 
@@ -65,37 +69,35 @@ def powerFlow(case,**kwargs):
 	tstart = time.time()
 
 	# -------------------------------------------------
-	# (10) STARTING NUMERICAL METHOD FOR POWER FLOW {{{1
+	# STARTING NUMERICAL METHOD FOR POWER FLOW
 	# -------------------------------------------------
 	if verbose > 0: print(' --> Beggining power flow method on case \'{0}\'...'.format(case.name))
-	while(True):
-	# (6) STARTING ITERATIONS
+	while(True):	# STARTING ITERATIONS
 
-		# (6.1) Increasing iteration counter
+		# Increasing iteration counter
 		itCount += 1
 		
-		# (6.2) Printing iteration report
+		# Printing iteration report
 		if verbose > 1: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 		
-		# (6.3) Calculating mF.Jacobian
+		# Calculating mF.Jacobian
 		H = mF.Jac(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV)
 		H = np.delete(H,0,axis=0) # Removing slack bar angle derivatives for it is known
 		Z = mF.Z(P,Q,isP,V,isV)
 		h = mF.h(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV)
 
-		# (6.5) Calculating state update
+		# Calculating state update
 		deltaSLC = np.delete(Z - h,0,axis=0)
 		dX = inv(H) @ deltaSLC
 
-		# (6.6) Updating V and theta
+		# Updating V and theta
 		theta[1:] += dX[0:case.nBus-1 ,0]
 		V += dX[case.nBus-1:,0]
 		
-		# (6.8) Printing iteration results
+		# Printing iteration results
 		if verbose > 1: print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[case.nBus-1: ,0]),dX[0: case.nBus-1,0]))
-		if verbose > 2: print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(H, (Z - h)/norm(Z-h), norm(Z-h)))
 
-		# (6.9) Testing for iteration sucess or divergence
+		# Testing for iteration sucess or divergence
 		if norm(dX) < absTol:
 			success = True
 			break	
@@ -103,17 +105,16 @@ def powerFlow(case,**kwargs):
 		if norm(dX) > deltaMax: break
 		if itCount > maxIter - 1: break
 
-		# (6.10) Pausing for each iteration
-		if verbose > 1: pause('\n --> Power flow method paused for next iteration. Press <ENTER> to continue.')
+		# Pausing for each iteration
+		if verbose > 1: input('\n --> Power flow method paused for next iteration. Press <ENTER> to continue.')
 
-
-	# (6.11) Calculating elapsed time
+	# Calculating elapsed time
 	elapsed = time.time() - tstart
 
 	# Printing results
 	if verbose > 0:
 
-		tabHeaders = ['Name','Number','Voltage (p.u.)','Angle (rad)']
+		tabHeaders = ['Bus name','Number','Voltage (p.u.)','Angle (rad)']
 
 		tabRows = []
 		for bus in case.busData:
@@ -121,12 +122,12 @@ def powerFlow(case,**kwargs):
 			
 		resultsTable = tabulate(tabRows,headers=tabHeaders,tablefmt='psql')
 
-		# (6.13) Printing convergence results
+		# Printing convergence results
 		if success:
-			print(' >> Power flow method successful with {0} total iterations and residue norm |dX| = {1}. Results:'.format(itCount,norm(dX)))
+			print('\n >> Power flow method successful with {0} total iterations and step increment norm |dX| = {1}. Results:'.format(itCount,norm(dX)))
 			print(resultsTable)
 		#	if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
 
-		else: print(' --> Power flow method not successful.')
+		else: print(' --> Power flow method not successful at iteration {0} with step increment |dX| = {1}.'.format(itCount,norm(dX)))
 
 	return [V, theta, norm(dX), elapsed, itCount, success]
