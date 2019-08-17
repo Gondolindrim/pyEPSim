@@ -53,22 +53,5 @@ case14 = lC.loadCase(netFile)
 
 print(case14)
 	
-print(' --> Beggining power flow...')
-V, theta, r, elapsed, itCount, success = pF.powerFlow(case14,deltaMax=100)
-print(' Done.\n')
 
-tabHeaders = ['Name','Number','Voltage (p.u.)','Angle (rad)']
-
-tabRows = []
-for bus in case14.busData:
-	tabRows.append([bus.name, bus.number, V[bus.number-1], theta[bus.number-1]])
-	
-resultsTable = tabulate(tabRows,headers=tabHeaders,tablefmt='psql')
-
-# (6.13) Printing convergence results
-if success:
-	print(' --> Power flow result:')
-	print(resultsTable)
-#	if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
-
-else: print(' --> Power flow method not successful.')
+V, theta, r, elapsed, itCount, success = pF.powerFlow(case14,deltaMax=100,verbose=1)

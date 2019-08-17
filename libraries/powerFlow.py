@@ -22,6 +22,8 @@ import time
 import libraries.classes as cL			# classes.py contains the bus, branch, generator and case classes
 from libraries import matrixFunctions as mF	# Contains the matrix functions used to compute the Jacobian
 
+from libraries.tabulate.tabulate import tabulate
+
 def powerFlow(case,**kwargs):
 
 	# absTol is the absolute tolerance used by the method
@@ -65,7 +67,7 @@ def powerFlow(case,**kwargs):
 	# -------------------------------------------------
 	# (10) STARTING NUMERICAL METHOD FOR POWER FLOW {{{1
 	# -------------------------------------------------
-
+	if verbose > 0: print(' --> Beggining power flow method on case \'{0}\'...'.format(case.name))
 	while(True):
 	# (6) STARTING ITERATIONS
 
@@ -73,7 +75,7 @@ def powerFlow(case,**kwargs):
 		itCount += 1
 		
 		# (6.2) Printing iteration report
-		if verbose > 0: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
+		if verbose > 1: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 		
 		# (6.3) Calculating mF.Jacobian
 		H = mF.Jac(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV)
@@ -90,8 +92,8 @@ def powerFlow(case,**kwargs):
 		V += dX[case.nBus-1:,0]
 		
 		# (6.8) Printing iteration results
-		if verbose > 0: print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[case.nBus-1: ,0]),dX[0: case.nBus-1,0]))
-		if verbose > 1: print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(H, (Z - h)/norm(Z-h), norm(Z-h)))
+		if verbose > 1: print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[case.nBus-1: ,0]),dX[0: case.nBus-1,0]))
+		if verbose > 2: print('\n --> J = \n{0},\n\n --> r = Z - h = \n{2}*\n{1}'.format(H, (Z - h)/norm(Z-h), norm(Z-h)))
 
 		# (6.9) Testing for iteration sucess or divergence
 		if norm(dX) < absTol:
@@ -107,5 +109,24 @@ def powerFlow(case,**kwargs):
 
 	# (6.11) Calculating elapsed time
 	elapsed = time.time() - tstart
+
+	# Printing results
+	if verbose > 0:
+
+		tabHeaders = ['Name','Number','Voltage (p.u.)','Angle (rad)']
+
+		tabRows = []
+		for bus in case.busData:
+			tabRows.append([bus.name, bus.number, V[bus.number-1], theta[bus.number-1]])
+			
+		resultsTable = tabulate(tabRows,headers=tabHeaders,tablefmt='psql')
+
+		# (6.13) Printing convergence results
+		if success:
+			print(' >> Power flow method successful with {0} total iterations and residue norm |dX| = {1}. Results:'.format(itCount,norm(dX)))
+			print(resultsTable)
+		#	if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
+
+		else: print(' --> Power flow method not successful.')
 
 	return [V, theta, norm(dX), elapsed, itCount, success]
