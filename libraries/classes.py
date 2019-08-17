@@ -66,13 +66,9 @@ class case:
 		self.B = imag(copy(self.Y))
 		self.G = real(copy(self.Y))
 
-	def __str__(self,**kwargs):
-		if ('verbose' in kwargs): verbose = kwargs['absTol']
-		else: verbose = 0
+	def __str__(self):
 
-		# tableFormat is the string that dictates the final table output format. It is derived from the formats of the dependency python-tabulate. See the documentation at the "table format" chapter.	
-		if ('tableformat' in kwargs): tFormat = kwargs['tableformat']
-		else: tableformat = 'psql' 
+		tableformat = 'psql' 
 
 		print(' --> Printing case \'{0}\' data:'.format(self.name))
 		
