@@ -135,36 +135,68 @@ class case:
 		return False
 
 # The 'reduceMatrixes' method returns the matrixes of the reduced system. In order to do this, the system will need to be reorganized so that the buses attached to a generator are numbered first. Since this method alters the sequence of buses (that is, it reorganizes the number of the buses), it is recommended that this method be run through a copied instance, that is, run 'reducedCase = copy(case)' and then 'reducedCase.reduceGrid()'. Although this may seem like a problem, given that the user will not know which buses were re-numbered, the bus names defined won'be altered, meaning that the human-readable names do not change. This ultimately means that it is imperative to give each bus a human-readable name. 
-	def reduceMatrixes(self):#(Y,Yload,V,genData):
-		nBus = self.nBus
-		nGen = self.nGen
+# In order to do all this, the method creates a copy of the original case, called 'rCase' for 'reduced case', upon which it will operate and swap buses.
+	def reduceMatrixes(self):
+		rCase = copy(self)	# New case rCase (for "reduced Case")
+		rCase.name = 'Reduced ' + rCase.name	# Adding the 'Reduced' word to the case ID so that it is distinguishable from the original case
+		nBus = rCase.nBus
+		nGen = rCase.nGen
 
-		# Obtaining the bus number permutation matrix through an equivalence matrix. Equiv is a nGen x 2 matrix where n is the generator number. The first column are the 'old' bus numbers and the second is the 'new' bus numbers; that way, each line shows an equivalence between the old and the new bus numbers.
+		YLoad = [(bus.pLoad - 1j*bus.qLoad)/bus.finalVoltage**2 for bus in rCase.busData]	# YLoad is the equivalent conductance load matrix. Each load is modelled as a constant impedance
+		rCase.runPowerFlow()
+		V = array([bus.finalVoltage for bus in rCase.busData])
+		theta = array([bus.finalAngle for bus in rCase.busData])
+		# Obtaining the bus number permutation matrix through an equivalence matrix. Equiv is an nBus x 1array where nBus is the generator number. Its elements are the 'new' bus numbers; for instance, equiv[1] = 5 means that bus 1 was swapped with bus 5.
 		equiv = array([ i for i in range(nBus)])
 
 		for i in range(nBus):
 			for k in range(i):
-				if not self.isGen(equiv[k]) and self.isGen(equiv[i]):
+				if not rCase.isGen(equiv[k]) and rCase.isGen(equiv[i]):
 					temp = equiv[k]
 					equiv[k] = equiv[i]
 					equiv[i] = temp
 					break
 
 		
+		P = np.zeros((nBus,nBus))
+		print(array([ i for i in range(nBus)]))
+		print(equiv)
+		for i in range(nBus):
+			P[i,equiv[i]] = 1
+
+		# Swapping buses according to equiv
+		temp = copy(rCase)
+		for i in range(rCase.nBus):
+			rCase.busData[i]  = temp.busData[equiv[i]]
+
+		# Bubble sorting the buses according to their new numbers
+		for i in range(rCase.nBus):
+			for j in range(rCase.nBus):
+				if rCase.busData[i].number < rCase.busData[j].number: rCase.busData[i].number, rCase.busData[j].number = rCase.busData[j].number, rCase.busData[i].number
+
+		self.printBusData()
+		rCase.printBusData()
+
+		# By the end of this routine, rCase should have ordered buses according to their number; the first buses are the ones that are attached to generators.
+
+		YDyn = P@Y@P
+		YLoadDyn = P@YLoad
+		VDyn,thetaDyn = P@V, P@theta
+		print(P)
 		# Building component matrixes
 
-		Y1 = self.Y[0 : nGen, 0 : nGen]
-		Y2 = self.Y[0 : nGen , nGen : nBus+1]
-		Y3 = self.Y[nGen : nBus , 0 : nGen]
-		Y4 = self.Y[nGen : nBus+1 , nGen : nBus+1]
+		Y1 = rCase.Y[0 : nGen, 0 : nGen]
+		Y2 = rCase.Y[0 : nGen , nGen : nBus+1]
+		Y3 = rCase.Y[nGen : nBus , 0 : nGen]
+		Y4 = rCase.Y[nGen : nBus+1 , nGen : nBus+1]
 
-		YLoad = [(bus.pLoad - 1j*bus.qLoad)/bus.finalVoltage**2 for bus in self.busData]	# YLoad is the equivalent conductance load matrix. Each load is modelled as a constant impedance
+		
 
 		Ylg = np.diag(Yload[0:nGen])
 
 		Yll = np.diag(Yload[nGen:nBus])
 
-		Ytrans = np.array([1/(gen.ra + 1j*gen.xPq) for gen in self.genData]) # Y' no livro
+		Ytrans = np.array([1/(gen.ra + 1j*gen.xPq) for gen in rCase.genData]) # Y' no livro
 		Ytrans = np.diag(Ytrans)
 		
 		YA = Ytrans
@@ -181,11 +213,11 @@ class case:
 		# Calculating YRED and C and D coefficients
 
 		Yred = YA - YB @ inv(YD) @ YC
-		V = array([ bus.finalVoltage for bus in self.busData])
+		V = array([ bus.finalVoltage for bus in rCase.busData])
 		C = np.array([ [ V[i]*V[j]*imag(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
 		D = np.array([ [ V[i]*V[j]*real(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
 
-		return [Yred,C,D]
+		return [Yred,C,D,reducedCase]
 
 	def printBusData(self,**kwargs):
 		if 'tablefmt' in kwargs: tableformat = kwargs['tablefmt']
@@ -195,7 +227,7 @@ class case:
 		tabRows = []
 		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
 		for bus in self.busData:
-			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle*180/np.pi ])
+			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle*180/np.pi])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
