@@ -50,4 +50,6 @@ netFile = args.net
 
 case14 = lC.loadCase(netFile)
 
-print(case14.busData[0])
+case14.runPowerFlow()
+
+print(case14)

@@ -35,7 +35,7 @@ def dataCardSearch(dataCard,fileData):
 			break
 	return line
 
-def loadCase(fileName):
+def loadCase(fileName,**kwargs):
 	print(' --> Loading case file \'{0}\'...'.format(fileName),end='')
 
 	caseID = 'Case {0}'.format(fileName)
@@ -88,7 +88,7 @@ def loadCase(fileName):
 			else:
 				busList.append(cL.bus( 0, line[0], line[3], line[6], line[7], line[8], line[9], line[10], line[15]))
 		
-		# Searching for the phase reference bus. The 'PV' bus is swapped with the bus in the top of the list.
+		# Reorganizing buses so the first bus is the slack
 		for i in range(len(busList)):
 			if busList[i].PVtype == 'VT':
 				busList[i], busList[0] = busList[0], busList[i]
@@ -132,7 +132,7 @@ def loadCase(fileName):
 					break
 
 				if float(line[14]) != 0: branchList.append(cL.branch(0, fromBus,toBus,line[6],line[7],line[8],1/float(line[14])))
-				else: branchList.append(cL.branch(0,fromBus,toBus,line[6],line[7],line[8],0))
+				else: branchList.append(cL.branch(0,fromBus,toBus,line[6],line[7],line[8],1))
 
 		# Just likle with the buses, i is the branch number counter. It is used to assign the branch numbers that will be used by the program; branch numbers are assigned in the order they appear in the netfile.
 		for i in range(len(branchList)): branchList[i].number = i

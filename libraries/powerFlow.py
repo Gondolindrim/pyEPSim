@@ -25,6 +25,9 @@ from libraries import matrixFunctions as mF	# Contains the matrix functions used
 # Tabulate for pretty tabular console output
 from libraries.tabulate.tabulate import tabulate
 
+from copy import deepcopy
+copy = deepcopy
+
 def powerFlow(case,**kwargs):
 
 	# absTol is the absolute tolerance used by the method
@@ -45,6 +48,11 @@ def powerFlow(case,**kwargs):
 	# If 2, each iteration result is displayed and program is paused ultil a key is pressed.
 	if ('verbose' in kwargs): verbose = kwargs['verbose']
 	else: verbose = 0
+
+	# fixedAngleList is the list of buses that have a fixed angle and must not be changed during the powerFlow method.
+	for bus in case.busData: 
+		if bus.PVtype == 'VT':
+			 slackBusNumber = bus.number
 
 	# Initial guess: flat start
 	V = .9*np.ones(case.nBus)
@@ -89,7 +97,7 @@ def powerFlow(case,**kwargs):
 		# Calculating state update
 		deltaSLC = np.delete(Z - h,0,axis=0)
 		dX = inv(H) @ deltaSLC
-
+	
 		# Updating V and theta
 		theta[1:] += dX[0:case.nBus-1 ,0]
 		V += dX[case.nBus-1:,0]

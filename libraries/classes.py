@@ -150,9 +150,7 @@ class case:
 					equiv[i] = temp
 					break
 
-		# Debugging the permutation algorithm
-		print(equiv)
-		print([self.isGen(number) for number in equiv])
+		
 		# Building component matrixes
 
 		Y1 = self.Y[0 : nGen, 0 : nGen]
@@ -195,9 +193,9 @@ class case:
 
 		print('\n >> Case \'{0}\' bus list'.format(self.name))
 		tabRows = []
-		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (rad)']
+		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
 		for bus in self.busData:
-			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle ])
+			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle*180/np.pi ])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
