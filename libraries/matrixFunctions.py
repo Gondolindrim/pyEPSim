@@ -222,9 +222,3 @@ def Jac(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 	dPdQ = conc((dP,dQ),axis=0)
 	
 	return conc((dPdQ,O),axis=0)
-
-
-
-# isGen tests if the bus number 'busN' is attached to a generator. {{{1
-def isGen(busN,genData):
-

@@ -73,41 +73,11 @@ class case:
 
 		print(' --> Printing case \'{0}\' data:'.format(self.name))
 		
-		# PRINTING BUS DATA ------------------------
-		print('\n >> Bus list')
-		tabRows = []
-		tabHeader = ['Number', 'Name', 'Active Load (pLoad)', 'Reactive Load (qLoad)', 'Active Generation (pGer)', 'Reactive Generation (qGer)', 'Shunt capacitance (bsh)', 'Shunt conductance (gsh)', 'Final voltage (p.u.)', 'Final angle (rad)']
-		for bus in self.busData:
-			tabRows.append([bus.number, bus.name, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle ])
+		self.printBusData()
+		self.printBranchData()
+		self.printGenData()
+		self.printFaultData()
 
-		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
-
-		# PRINTING BRANCH DATA ---------------------
-		print('\n\n >> Branch list')
-		tabRows = []
-		tabHeader = ['From Bus', 'To Bus', 'Resistance (r)', 'Reactance (x)', 'Shunt susceptance (bsh)', 'Transformer turns ratio (a)']
-		for branch in self.branchData:
-			tabRows.append([branch.fromBus, branch.toBus, branch.r, branch.x, branch.bsh, branch.a])
-
-		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
-
-		# PRINTING GENERATOR DATA ------------------
-		print('\n\n >> Generator list')
-		tabRows = []
-		tabHeader = ['Bus Number', 'Rated Power', 'H', 'D', 'ra', 'xL', 'xd', 'xPd', 'xPPd', 'tPdo', 'tPPdo', 'xq', 'xPq', 'xPPq', 'tPqo', 'tPPqo']
-		for gen in self.genData:
-			tabRows.append([gen.busNumber, gen.ratedPower,gen.H, gen.D, gen.ra, gen.xL, gen.xd, gen.xPd, gen.xPPd, gen.tPdo, gen.tPPdo, gen.xq, gen.xPq, gen.xPPq, gen.tPqo, gen.tPPqo])
-
-		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))	
-
-		# PRINTING FAULT DATA ----------------------
-		print('\n\n >> Possible faults list')
-		tabRows = []
-		tabHeader = ['Branch Number', 'Location', 'Opening Time']
-		for fault in self.faultData:
-			tabRows.append([fault.branch, fault.location, fault.openingTime])
-
-		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
 		return ''
 
@@ -131,19 +101,19 @@ class case:
 		K = [ [] for i in range(self.nBus)]
 		
 		for branch in self.branchData:
-			K[branch.fromBus-1] += [branch.toBus - 1]
-			K[branch.toBus-1] += [branch.fromBus - 1]
+			K[branch.fromBus] += [branch.toBus]
+			K[branch.toBus] += [branch.fromBus]
 
-			r[branch.fromBus-1,branch.toBus-1] = branch.r
-			r[branch.toBus-1,branch.fromBus-1] = branch.r
+			r[branch.fromBus,branch.toBus] = branch.r
+			r[branch.toBus,branch.fromBus] = branch.r
 
-			x[branch.fromBus-1,branch.toBus-1] = branch.x
-			x[branch.toBus-1,branch.fromBus-1] = branch.x
+			x[branch.fromBus,branch.toBus] = branch.x
+			x[branch.toBus,branch.fromBus] = branch.x
 
-			bsh[branch.fromBus-1,branch.toBus-1] = branch.bsh	
-			bsh[branch.toBus-1,branch.fromBus-1] = branch.bsh
+			bsh[branch.fromBus,branch.toBus] = branch.bsh	
+			bsh[branch.toBus,branch.fromBus] = branch.bsh
 
-			if branch.a != 0: a[branch.fromBus-1,branch.toBus-1] = branch.a
+			if branch.a != 0: a[branch.fromBus,branch.toBus] = branch.a
 
 		for k in range(self.nBus):
 			bsh[k,k] = self.busData[k].bsh
@@ -165,7 +135,7 @@ class case:
 		return False
 
 # The 'reduceMatrixes' method returns the matrixes of the reduced system. In order to do this, the system will need to be reorganized so that the buses attached to a generator are numbered first. Since this method alters the sequence of buses (that is, it reorganizes the number of the buses), it is recommended that this method be run through a copied instance, that is, run 'reducedCase = copy(case)' and then 'reducedCase.reduceGrid()'. Although this may seem like a problem, given that the user will not know which buses were re-numbered, the bus names defined won'be altered, meaning that the human-readable names do not change. This ultimately means that it is imperative to give each bus a human-readable name. 
-	def reduceMatrixes(self):#(Y,Yload,V,genData): #{{{1
+	def reduceMatrixes(self):#(Y,Yload,V,genData):
 		nBus = self.nBus
 		nGen = self.nGen
 
@@ -219,12 +189,61 @@ class case:
 
 		return [Yred,C,D]
 
+	def printBusData(self,**kwargs):
+		if 'tablefmt' in kwargs: tableformat = kwargs['tablefmt']
+		else: tableformat = 'psql' 
+
+		print('\n >> Case \'{0}\' bus list'.format(self.name))
+		tabRows = []
+		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (rad)']
+		for bus in self.busData:
+			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle ])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
+
+	def printBranchData(self,**kwargs):
+		if 'tablefmt' in kwargs: tableformat = kwargs['tablefmt']
+		else: tableformat = 'psql' 
+
+		print('\n >> Case \'{0}\' branch list'.format(self.name))
+		tabRows = []
+		tabHeader = ['Number','From Bus\n(Tap bus)', 'To Bus\n(Z bus)', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)']
+		for branch in self.branchData:
+			tabRows.append([branch.number,self.busData[branch.fromBus].name, self.busData[branch.toBus].name, branch.r, branch.x, branch.bsh, branch.a])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
+
+	def printGenData(self,**kwargs):
+		if 'tablefmt' in kwargs: tableformat = kwargs['tablefmt']
+		else: tableformat = 'psql' 
+
+		print('\n >> Case \'{0}\' generator list (sorted by bus number)'.format(self.name))
+		tabRows = []
+		tabHeader = ['Bus', 'Rated Power\n(MW)', 'H\n(p.u.)', 'D\n(p.u.)', 'ra\n(p.u.)', 'xL\n(p.u.)', 'xd\n(p.u.)', 'xPd\n(p.u.)', 'xPPd\n(p.u.)', 'tPdo\n(s)', 'tPPdo\n(s)', 'xq\n(p.u.)', 'xPq\n(p.u.)', 'xPPq\n(p.u.)', 'tPqo\n(s)', 'tPPqo\n(s)']
+		for gen in self.genData:
+			tabRows.append([self.busData[gen.busNumber].name, gen.ratedPower,gen.H, gen.D, gen.ra, gen.xL, gen.xd, gen.xPd, gen.xPPd, gen.tPdo, gen.tPPdo, gen.xq, gen.xPq, gen.xPPq, gen.tPqo, gen.tPPqo])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))	
+
+	def printFaultData(self,**kwargs):
+		if 'tablefmt' in kwargs: tableformat = kwargs['tablefmt']
+		else: tableformat = 'psql'
+ 
+		print('\n >> Case \'{0}\'  possible faults list'.format(self.name))
+		tabRows = []
+		tabHeader = ['Branch Number', 'Location', 'Opening Time']
+		for fault in self.faultData:
+			tabRows.append([fault.branch, fault.location, fault.openingTime])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
+
 # (2) Bus object {{{1
 # The bus object stores data for a particular bus of the net:
 # --> "number" is the bus number in a list. This number can be user-attributed in the net-file,
 # but such numbers must be consecutive and have no gaps.
 # --> "name" is a human-readable name for that particular bus, so that the user can
 # distinguish buses by a name rather than their numbers.
+# --> "type" is thetype of the bus, meaning PV (hold voltage in voltage limits), PQ (hold generation within limits), VT (hold phase), UN (unregulated)
 # --> "pLoad" and "qLoad" are respectively the active and reactive power that the bus exports as load.
 # These loads are further modelled in the algorithm by a constant impedance.
 # --> "pGen" and "qGen" are respectively the active and reactive power injected into the bus.
@@ -232,9 +251,10 @@ class case:
 # will be added to the pLoad and qLoad after these are converted to shunt impedances.
 # --> "finalVoltage" and "finalAngle" are the calculated (through power flow or state estimation) voltage and angle of the bus. These parameters are optional key arguments that do not need to be given when the instance is created; in this case, they assume the 1 and 0 values ("flat start"). These values can be changed directly or through the runPowerFlow() method in the case class.
 class bus:
-	def __init__(self,number,name,pLoad,qLoad,pGen,qGen,gsh,bsh,finalVoltage = None, finalAngle = None):
+	def __init__(self,number,name,PVtype,pLoad,qLoad,pGen,qGen,gsh,bsh,finalVoltage = None, finalAngle = None):
 		self.number = int(number)
 		self.name = str(name)
+		self.PVtype = str(PVtype)
 		self.pLoad = float(pLoad)
 		self.qLoad = float(qLoad)
 		self.pGen = float(pGen)
@@ -245,6 +265,15 @@ class bus:
 		self.finalVoltage = 1 if finalVoltage is None else finalVoltage
 		self.finalAngle = 0 if finalAngle is None else finalAngle
 
+	def __str__(self):
+		tableformat = 'psql'
+		print(' >> Bus	\'{0}\':'.format(self.name))
+		tabRows = []
+		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (rad)']
+		tabRows.append([self.number, self.name, self.PVtype, self.pLoad, self.qLoad, self.pGen, self.qGen, self.bsh, self.gsh, self.finalVoltage, self.finalAngle ])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
+
 # (3) Branch object {{{1
 # The branch object stores data for a particular branch of the system:
 #--> "fromBus" and "toBus" are the numbers of respectively the first and second buses attached to the branch.
@@ -252,7 +281,8 @@ class bus:
 #--> "bsh" is the shunt susceptance of the branch according to the pi model
 #--> "a" is the turns ratio of the transformer attached to the branch when there is one.
 class branch:
-	def __init__(self,fromBus,toBus,r,x,bsh,a):
+	def __init__(self,number,fromBus,toBus,r,x,bsh,a):
+		self.number = int(number)
 		self.fromBus = int(fromBus)
 		self.toBus = int(toBus)
 		self.r = float(r)
@@ -272,9 +302,10 @@ class branch:
 # --> "tPqo" and "tPdo" are the rotor quadrature- and direct-axis transient time constants;
 # --> "tPPqo" and "tPPdo" are rotor quadrature- and direct-axis sub-transient time constants;
 class generator:
-	def __init__(self,busNumber,ratedPower,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo):
+	def __init__(self,busNumber,ratedPower,ratedVoltage,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo):
 		self.busNumber = int(busNumber)
 		self.ratedPower = float(ratedPower)
+		self.ratedVoltage = float(ratedVoltage)
 		self.H = float(H)
 		self.D = float(D)
 		self.ra = float(ra)

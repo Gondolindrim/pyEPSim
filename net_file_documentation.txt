@@ -1,36 +1,37 @@
 Columns are separated by TAB character.
-
+I = integer
+S = string
+F = float
 -------------------------------------------------
 BUS DATA COLUMNS:
 
-01 Bus number (I) *
-02 Name (A)*
-03 Load flow area number (I) Don't use zero!
-04 Loss zone number (I)
-05 Type (I) *
-	0 - Unregulated (load, PQ)
-	1 - Hold MVAR generation within voltage limits, (PQ)
-	2 - Hold voltage within VAR limits (gen, PV)
-	3 - Hold voltage and angle (swing, V-Theta) (must always have one)
-06 Final voltage, p.u. (F) *
-07 Final angle, degrees (F) *
-08 Load MW (F) *
-09 Load MVAR (F) *
-10 Generation MW (F) *
-11 Generation MVAR (F) *
-12 Base KV (F)
-13 Desired volts (pu) (F) (This is desired remote voltage if this bus is controlling another bus.
-14 Maximum MVAR or voltage limit (F)
-15 Minimum MVAR or voltage limit (F)
-16 Shunt conductance G (per unit) (F) *
-17 Shunt susceptance B (per unit) (F) *
-18 Remote controlled bus number
+01 Name (S)*
+02 Load flow area number (I) Don't use zero!
+03 Loss zone number (I)
+04 Type (S) *
+	UN - Unregulated (load, PQ)
+	PQ - Hold MVAR generation within voltage limits, (PQ)
+	PV - Hold voltage within VAR limits (gen, PV)
+	VT - Hold voltage and angle (swing, V-Theta) (must always have exactly one)
+05 Final voltage, p.u. (F) *
+06 Final angle, degrees (F) *
+07 Load MW (F) *
+08 Load MVAR (F) *
+19 Generation MW (F) *
+10 Generation MVAR (F) *
+11 Base KV (F)
+12 Desired volts (pu) (F) (This is desired remote voltage if this bus is controlling another bus.
+13 Maximum MVAR or voltage limit (F)
+14 Minimum MVAR or voltage limit (F)
+15 Shunt conductance G (per unit) (F) *
+16 Shunt susceptance B (per unit) (F) *
+17 Remote controlled bus number
 
 -------------------------------------------------
 BRANCH DATA COLUMNS
 
-01 Tap bus number (I). For transformers or phase shifters, the side of the model the non-unity tap is on 
-02 Z bus number (I).  For transformers and phase shifters, the side of the model the device impedance is on.
+01 Tap bus name (S). For transformers or phase shifters, the side of the model the non-unity tap is on 
+02 Z bus name (S).  For transformers and phase shifters, the side of the model the device impedance is on.
 03 Load flow area (I)
 04 Loss zone (I)
 05 Circuit (I) * (Use 1 for single lines)
@@ -63,26 +64,27 @@ BRANCH DATA COLUMNS
 GENERATOR DATA COLUMNS:
 
 01 Bus number (I).
-02 Rated power (MVA)
-03 Inertia constant H (in MW)
-04 Damping constant
-05 Armature resistance r_a (pu)
-06 Leakage reactance x_L (pu)
-07 Direct axis quadrature reactance x_d (pu)
-08 Direct axis transient reactance x'_d (pu)
-09 Direct axis subtransient reactance x''_d (pu)
-10 Direct axis rotor transient magnetization time constant T'_do
-11 Direct axis rotor subtransient magnetization time constant T''_do
-12 Quadrature axis quadrature reactance x_q (pu)
-13 Quadrature axis transient reactance x'_q (pu)
-14 Quadrature axis subtransient reactance x''_q (pu)
-15 Quadrature axis rotor transient magnetization time constant T'_qo
-16 Quadrature axis rotor subtransient magnetization time constant T''_qo
+02 Rated power (in MVA)
+03 Rated voltage (in kV)
+04 Inertia constant H (in pu)
+05 Damping constant (pu)
+06 Armature resistance r_a (pu)
+07 Leakage reactance x_L (pu)
+08 Direct axis quadrature reactance x_d (pu)
+09 Direct axis transient reactance x'_d (pu)
+10 Direct axis subtransient reactance x''_d (pu)
+11 Direct axis rotor transient magnetization time constant T'_do
+12 Direct axis rotor subtransient magnetization time constant T''_do
+13 Quadrature axis quadrature reactance x_q (pu)
+14 Quadrature axis transient reactance x'_q (pu)
+15 Quadrature axis subtransient reactance x''_q (pu)
+16 Quadrature axis rotor transient magnetization time constant T'_qo
+17 Quadrature axis rotor subtransient magnetization time constant T''_qo
 -------------------------------------------------
 FAULT DATA COLUMNS
 
-1: Branch number
-2: Short circuit location, given by a number between 0 and 1. In the case of a short-circuit,
+1: Branch number (by order of input), beggining with 0 (I)
+2: Short circuit location, given by a number between 0 and 1 (F). In the case of a short-circuit,
 	the line impedance ZL is divided in two parts: one connecting to the "from" bus with magnitude a*ZL and
 	the other connected to the "to" bus with magnitude (1-a)*ZL.
-3: Opening time. Time in seconds that the relay will remain open before the line is removed.
+3: Opening time in seconds (F). Time in seconds that the relay will remain open before the line is removed. Opening time is generally under 0.5 seconds and critical opening times are generally 0.1-0.3 seconds.

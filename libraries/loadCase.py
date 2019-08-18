@@ -16,6 +16,9 @@ import numpy as np
 
 import libraries.classes as cL
 
+from copy import deepcopy
+copy = deepcopy
+
 # dataCardError is a custom-created exception raised whenever a start or end card is not found.
 class dataCardError(Exception):
 	pass
@@ -46,7 +49,6 @@ def loadCase(fileName):
 				caseID = line[1]	# Extracting power base value
 				break
 			elif line[0] == '':
-				raise dataCardError(' --> Netfile error: \'Case id\' data card was not found! Please define a case ID name for better clarity.')
 				break
 
 	with open(fileName,'r') as fileData:
@@ -81,10 +83,21 @@ def loadCase(fileName):
 			line = fileData.readline().strip().split('\t')
 			if line[0] == '-999': break
 			elif line[0] == '':
-				raise dataCardError(' --> Netfile error: the endcard \'-999\' was not found when acquiring bus data')
+				raise dataCardError(' >> Netfile error: the endcard \'-999\' was not found when acquiring bus data')
 				break
-			else: busList.append(cL.bus( line[0], line[1], line[7], line[8], line[9], line[10], line[15], line[16]))
-			
+			else:
+				busList.append(cL.bus( 0, line[0], line[3], line[6], line[7], line[8], line[9], line[10], line[15]))
+		
+		# Searching for the phase reference bus. The 'PV' bus is swapped with the bus in the top of the list.
+		for i in range(len(busList)):
+			if busList[i].PVtype == 'VT':
+				busList[i], busList[0] = busList[0], busList[i]
+				break
+		else:
+			raise dataCardError (' >> Netfile error: no VT bus was found! Please assign a reference bus.')
+
+		# i is the bus number counter. It is used to assign the bus numbers that will be used by the program; bus numbers are assigned in the order they appear in the netfile.
+		for i in range(len(busList)): busList[i].number = i
 			
 		# Branch data parameters ---------------------------------------
 		# Searching for branch data start card
@@ -96,15 +109,42 @@ def loadCase(fileName):
 			line = fileData.readline().strip().split('\t')
 			if line[0] == '-999': break
 			elif line[0] == '':
-				raise dataCardError(' --> Netfile error: the endcard \'-999\' was not found when acquiring branch data')
+				raise dataCardError(' >> Netfile error: the endcard \'-999\' was not found when acquiring branch data')
 				break
 			else:
-				if float(line[14]) != 0: branchList.append(cL.branch(line[0],line[1],line[6],line[7],line[8],1/float(line[14])))
-				else: branchList.append(cL.branch(line[0],line[1],line[6],line[7],line[8],0))
+				# Searching for the number of the tap bus
+				for bus in busList:
+					if str(line[0]) == bus.name:
+						fromBus = bus.number
+						break
+				else:	# If break was not done it was because the tap bus name declared does not exist
+					raise dataCardError(' >> Netfile error: there is a branch declared with non-declared tap bus \'{0}\''.format(line[0]))
+					break
+				
+				# Searching for the number of the Z bus
+				for bus in busList:
+					#print(bus.name)
+					if str(line[1]) == bus.name:
+						toBus = bus.number
+						break
+				else:	# If break was not done it was because the Z bus name declared does not exist
+					raise dataCardError(' >> Netfile error: there is a branch declared with non-declared Z bus \'{0}\''.format(line[1]))
+					break
+
+				if float(line[14]) != 0: branchList.append(cL.branch(0, fromBus,toBus,line[6],line[7],line[8],1/float(line[14])))
+				else: branchList.append(cL.branch(0,fromBus,toBus,line[6],line[7],line[8],0))
+
+		# Just likle with the buses, i is the branch number counter. It is used to assign the branch numbers that will be used by the program; branch numbers are assigned in the order they appear in the netfile.
+		for i in range(len(branchList)): branchList[i].number = i
 
 		# Generator data parameters ------------------------------------
 		# Searching for generator data start card
 		line = dataCardSearch('GENERATOR DATA FOLLOWS',fileData)
+		line = dataCardSearch('PU BASE:',fileData)
+		genDataPUReference = str(line[1])
+		if genDataPUReference != 'SYSTEM' and genDataPUReference != 'GENERATOR':
+			raise dataCardError(' >> Generator PU reference declared is wrong or was not found. Please inform a valid option SYSTEM or GENERATOR.')
+
 		line = fileData.readline()	# Skip --- line
 
 		genList = []	# genList was named like so because there already is a genData variable in the program
@@ -114,7 +154,38 @@ def loadCase(fileName):
 			elif line[0] == '':
 				raise dataCardError(' --> Netfile error: the endcard \'-999\' was not found when acquiring generator data')
 				break
-			else: genList.append(cL.generator(line[0],line[1],line[2],line[3],line[4],line[5],line[6],line[7],line[8],line[9],line[10],line[11],line[12],line[13],line[14],line[15]))			
+			else:
+				for bus in busList:
+					if str(line[0]) == bus.name:
+						genBus = bus.number
+						break
+				else:	# If break was not done it was because the tap bus name declared does not exist
+					raise dataCardError(' >> Netfile error: there is a generator declared with non-declared bus \'{0}\''.format(line[0]))
+					break
+
+
+				# Creating the new generator instance to be added
+				newGen = cL.generator(genBus,line[1],line[2],line[3],line[4],line[5],line[6],line[7],line[8],line[9],line[10],line[11],line[12],line[13],line[14],line[15],line[16])
+
+				# If the parameters of the generator were given in relation with the generator PU system, they should be converted to the system's PU
+				if genDataPUReference == 'GENERATOR' or genDataPUReference == 'generator':
+					newGen.H *= newGen.ratedPower/Sb
+					newGen.ra *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+					newGen.xL *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+					newGen.xd *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+					newGen.xPd *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+					newGen.xPPd *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+					newGen.xq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+					newGen.xPq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+					newGen.xPPq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+
+				genList.append(newGen)
+	
+
+		# Sorting generators by their bus number
+		for i in range(len(genList)):
+			for j in range(len(genList)):
+				if genList[i].busNumber < genList[j].busNumber: genList[i], genList[j] = genList[j], genList[i]
 		
 		# Fault data ---------------------------------------------------
 		# Searching for fault data start card 

@@ -50,4 +50,4 @@ netFile = args.net
 
 case14 = lC.loadCase(netFile)
 
-case14.reduceMatrixes()
+print(case14.busData[0])

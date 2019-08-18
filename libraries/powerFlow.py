@@ -118,7 +118,7 @@ def powerFlow(case,**kwargs):
 
 		tabRows = []
 		for bus in case.busData:
-			tabRows.append([bus.name, bus.number, V[bus.number-1], theta[bus.number-1]])
+			tabRows.append([bus.name, bus.number, V[bus.number], theta[bus.number]])
 			
 		resultsTable = tabulate(tabRows,headers=tabHeaders,tablefmt='psql')
 
