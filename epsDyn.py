@@ -1,3 +1,4 @@
+#python epsDyn.py 14BusNet.txt 14BusMeasures.txt -pf --dyn -t 1 -pps 1000
 # -------------------------------------------------
 # UNIVERSITY OF SAO PAULO
 # SÃO CARLOS SCHOOL OF ENGINEERING (EESC)
@@ -28,6 +29,9 @@ transpose = np.transpose
 inv = np.linalg.inv
 sqrt = np.sqrt
 pi = np.pi
+
+import math
+floor = math.floor
 
 import matplotlib.pyplot as pyplt
 from matplotlib import rc
@@ -844,7 +848,7 @@ if estimatestate:
 	else:
 		print('\n --> Beggining numerical method... ', end='')
 
-	# (5.6) Start time counte6
+	# (5.6) Start time counte6		self.runPowerFlow()
 	tstart = time.time()
 
 	# -------------------------------------------------
@@ -1024,7 +1028,7 @@ if powerflow or dyn:
 # -------------------------------------------------
 if dyn:
 	print('\n' + '-'*50 + '\n DYNAMIC FAULT SIMULATION \n' + '-'*50)
-	print('\n --> Setting up dynamical simulation...',end='')
+	print('\n --> Setting up dynamical simulation...')
 	YLoad = [(Pload[i] - 1j*Qload[i])/V[i]**2 for i in range(nBus)]
 	
 	# Permutating the Y and K matrixes. Explanation: the Y matrix built before did not consider which bars were generators and which are not. Nevertheless, to build the Y_RED matrix, the generator buses must be the first n. This means that we must obtain a new Y matrix wherein the first n columns are the genertor buses.
@@ -1064,7 +1068,7 @@ if dyn:
 	for i in range(nGen):
 		pm[i] = (VDyn[i]**2)*real(Yred[i,i]) + sum( [ (C[i,j]*sin(thetaDyn[i] - thetaDyn[j]) + D[i,j]*cos(thetaDyn[i] - thetaDyn[j])) for j in range(nGen)])
 
-	fig = [ [] for i in range(nFault)]
+	fig = [ [] for i in range(2*nFault)]
 
 	for q in range(nFault):
 
@@ -1093,13 +1097,38 @@ if dyn:
 
 		YredFault,CFault,DFault = mF.reduceGrid(YDynFault,YLoadDynFault,VDynFault,genDataDyn)
 
-		print('Done. \n --> Starting numerical simulation of fault {0}...'.format(int(faultData[q,0] + 1)),end='')
+		print(' --> Starting numerical simulation of fault {0}...'.format(int(faultData[q,0] + 1)),end='')
 
 
 		tFault = np.linspace(0,faultData[q,4],int(round(pps*(faultData[q,4]))),endpoint=True)
 		y0 = np.zeros(2*nGen)
 
 		for i in range(nGen): y0[2*i] = thetaDyn[i]
+
+		def kEnergy(x):
+			Vk = 0
+			#xCOA = 0
+			#for i in range(len(x)):
+			#	xCOA += genData[floor(i/2),2]*x[i]
+
+			#xCOA /= sum(genData[:,2])
+			#xP = x - xCOA
+			for k in range(nGen):
+				Vk += genData[k,2]*x[2*k+1]**2/4
+
+			return Vk
+
+		def pEnergy(x):
+			x0 = y0
+			C = CFault
+			D = DFault
+			
+			nGen = genData.shape[0]
+			Vp = 0
+			for k in range(nGen):
+				Vp +=  (pm[k] - (V[k]**2)*real(Yred[k,k]))*(x[2*k] - x0[2*k]) - sum( [-C[k,j]*( cos(x[2*k] - x[2*j]) - cos(x0[2*k] - x0[2*j]) ) + D[k,j]*(sin(x[2*k] - x[2*j]) - sin(x0[2*k] - x0[2*j]) ) for j in range(nGen)])
+
+			return Vp
 
 	#	print('\n --> y0 = {0}'.format(y0))
 		#print('\n --> Initial ODE: {0}'.format(mF.odeFault1(y0,0,C,D,Yred,VDyn,pm,genDataDyn)))
@@ -1121,36 +1150,102 @@ if dyn:
 		tPost = np.linspace(faultData[q,4],tFinal,int(round(pps*(tFinal - faultData[q,4]))),endpoint=True)
 		solPost = odeint(mF.odeFault1,solFault[-1,:],tPost,args=(CPost,DPost,YredPost,VDyn,pm,genDataDyn))
 
-		print('Done. \n')
+		print('Done.')
 
 		# Plotting results
 
 		sol = conc((solFault,solPost),axis=0)
 		t = conc((tFault,tPost),axis=0)
 
-		fig[q] = pyplt.figure()
-		ax1 = fig[q].add_subplot(2,1,1)
-		ax2 = fig[q].add_subplot(2,1,2)
+		thetaCOA = np.zeros(len(t))
+		wCOA = np.zeros(len(t))
+		for j in range(len(t)):
+			#state = sol[5,:]
+#			print(state)
+
+			for i in range(nGen):
+				wCOA[j] += genData[i,2]*sol[j,2*i]
+				thetaCOA[j] += genData[i,2]*sol[j,2*i+1]
+
+		thetaCOA /= sum(genData[:,2])
+		wCOA /= sum(genData[:,2])
+
+		#thetaCOA = np.array([[i] for i in thetaCOA])
+	#	wCOA = np.array([[i] for i in wCOA])
+
+		solCOA = np.zeros(sol.shape)
+		
+		for i in range(nGen):
+			solCOA[:,2*i] = sol[:,2*i] - wCOA
+			solCOA[:,2*i+1] = sol[:,2*i+1] - thetaCOA
+
+		sol = solCOA
+
+		fig[2*q] = pyplt.figure()
+		fig[2*q + 1] = pyplt.figure()
+		ax1 = fig[2*q].add_subplot(2,1,1)
+		ax2 = fig[2*q].add_subplot(2,1,2)
+		ax3 = fig[2*q+1].add_subplot(1,1,1)
+
 
 		for i in range(nGen):
 			ax2.plot(t,sol[:, 2*i])
-			ax1.plot(t,sol[:, 2*i+1]-sol[:, 1],label=busName[int(genData[i,0])-1])
+			#ax1.plot(t,sol[:, 2*i+1] - sol[:, 1],label=busName[int(genData[i,0])-1])
+			ax1.plot(t,sol[:, 2*i+1],label=busName[int(genData[i,0])-1])
+
+		#ax2.plot(t,wCOA,label='COA')
+	#	ax1.plot(t,thetaCOA,label='COA')
+
+		totalEnergy = [kEnergy(sol[i,:]) + pEnergy(sol[i,:]) for i in range(len(t))]
+		kineticEnergy = [kEnergy(sol[i,:]) for i in range(len(t))]
+		potentialEnergy = [pEnergy(sol[i,:]) for i in range(len(t))]
+		dPotentialEnergy = np.gradient(potentialEnergy)
+		ddPotentialEnergy = np.gradient(dPotentialEnergy)
+		
+		#print([pEnergy(sol[i,:]) for i in range(len(t))])
+		ax3.plot(t, totalEnergy, label=r'$V_T$' ) 
+		ax3.plot(t, kineticEnergy, label=r'$V_K$' ) 
+		ax3.plot(t, potentialEnergy, label=r'$V_P$' ) 
+		ax3.plot(t, dPotentialEnergy*100, label=r'$V_P^\prime$' ) 
+		
+		pTol = 1e-6
+		for k in range(len(dPotentialEnergy)):
+			if dPotentialEnergy[k] < pTol and ddPotentialEnergy[k] < 0: break
+
+		critEnergy = potentialEnergy[k]
+		critEnergyTime = t[k]
+
+		pTol = 1e-3
+		for k in range(len(totalEnergy)):
+			if abs(totalEnergy[k] - critEnergy) < pTol : break
+
+		critTime = t[k]
+
+#		print(' >> First Vp critical point found at t = {0} s, where Vp = {1}'.format(t[k],potentialEnergy[k]))
+
+		ax3.plot(critEnergyTime,critEnergy,'bx')
+		ax3.plot(critTime,critEnergy,'rx')
+
+		ax3.axvline(x=critEnergyTime, color='m', lw=1, linestyle='--',label=r'$t^* =$'+'{0:.4f}'.format(critEnergyTime))
+		ax3.axvline(x=critTime, color='b', lw=1, linestyle='--',label=r'$t_{crit} =$'+'{0:.4f}'.format(critTime))
+		ax3.axhline(y=critEnergy, color='m', lw=1, linestyle='--',label=r'$V_{crit} =$'+'{0:.4f}'.format(critEnergy))
 
 		ax1.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F$'.format(faultData[q,4]))
 		ax2.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F$'.format(faultData[q,4]))
+		ax3.axvline(x=faultData[q,4], color='k', lw=1, linestyle='--',label=r'$t_F = {0}$'.format(faultData[q,4]))
 		ax1.legend(loc="lower right")
 
 		ax1.set_ylabel(r'Synchronized angular speed $\left(\sfrac{rad}{s}\right)$')
 		ax2.set_ylabel(r'Power angle $\left(rad\right)$')
-		ax1.grid(which='major',axis='both')
-		ax1.grid(which='major',axis='both')
+		ax3.set_ylabel(r'System Lyapunov Energy')
 
 		ax1.grid(which='major',axis='both')
 		ax2.grid(which='major',axis='both')
+		ax3.grid(which='major',axis='both')
 
-		fig[q].suptitle(r'Fault {0} results. Description: short-circuit at line connecting buses {1} and {2}, at position {3}, with open time {4} ms'.format(int(faultData[q,0])+1, int(faultData[q,1]+1), int(faultData[q,2]+1), faultData[q,3], 1000*faultData[q,4]))
+		fig[2*q].suptitle(r'Fault {0} results. Description: short-circuit at line connecting buses {1} and {2}, at position {3}, with open time {4} ms'.format(int(faultData[q,0])+1, int(faultData[q,1]+1), int(faultData[q,2]+1), faultData[q,3], 1000*faultData[q,4]))
 		ax2.set_xlabel('Time (s)')
 
-print(' --> Plotting results.')
-pyplt.legend()
-pyplt.show()
+	print(' --> Plotting results.')
+	pyplt.legend()
+	pyplt.show()

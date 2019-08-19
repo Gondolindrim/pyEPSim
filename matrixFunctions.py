@@ -271,3 +271,19 @@ def odeFault2(x,t,C,D,Yred,V,pm,genData): #{{{1
 		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)]) )/(2*genData[k,2])	# omega = x[k+1]
 
 	return F
+
+def potEnergy(x,genData):
+	nGen = genData.shape[0]
+	Vp = 0
+	for k in range(nGen):
+		Vp += genData[k,2]*x[2*k+1]**2/4
+
+	return Vp
+
+def kEnergy(x,x0,t,C,DV,pm,genData):
+	nGen = genData.shape[0]
+	Vk = 0
+	for k in range(nGen):
+		Vk += (pm[k] - (V[k]**2)*real(Yred[k,k]))*(x[2*k] - x0[2*k]) - sum( [-C[k,j]*( cos(x[2*k] - x[2*j]) - cos(x0[2*k] - x0[2*j]) ) + D[k,j]*(sin(x[2*k] - x[2*j]) - sin(x0[2*k] - x0[2*j]) ) for j in range(nGen)])
+
+	return Vk
