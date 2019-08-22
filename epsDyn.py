@@ -1125,8 +1125,9 @@ if dyn:
 			
 			nGen = genData.shape[0]
 			Vp = 0
-			for k in range(nGen):
-				Vp +=  (pm[k] - (V[k]**2)*real(Yred[k,k]))*(x[2*k] - x0[2*k]) - sum( [-C[k,j]*( cos(x[2*k] - x[2*j]) - cos(x0[2*k] - x0[2*j]) ) + D[k,j]*(sin(x[2*k] - x[2*j]) - sin(x0[2*k] - x0[2*j]) ) for j in range(nGen)])
+			Vp = sum([ (pm[k] - (V[k]**2)*real(Yred[k,k]))*(x[2*k] - x0[2*k]) - sum( [-C[k,j]*( cos(x[2*k] - x[2*j]) - cos(x0[2*k] - x0[2*j]) ) + D[k,j]*((x[2*k] + x[2*j] - x0[2*k] - x0[2*j])/(x[2*k] - x[2*j] - x0[2*k] + x0[2*j]))*(sin(x[2*k] - x[2*j]) - sin(x0[2*k] - x0[2*j]) ) if j != k else 0 for j in range(nGen)]) for k in range(nGen)])
+		#	for k in range(nGen):
+		#		Vp +=  (pm[k] - (V[k]**2)*real(Yred[k,k]))*(x[2*k] - x0[2*k]) - sum( [-C[k,j]*( cos(x[2*k] - x[2*j]) - cos(x0[2*k] - x0[2*j]) ) + D[k,j]*((x[2*k] + x[2*j] - x0[2*k] - x0[2*j])/(x[2*k] - x[2*j] - x0[2*k] + x0[2*j]))*(sin(x[2*k] - x[2*j]) - sin(x0[2*k] - x0[2*j]) ) if j != k else 0 for j in range(nGen)])
 
 			return Vp
 
