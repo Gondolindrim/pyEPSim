@@ -49,13 +49,8 @@ def powerFlow(case,**kwargs):
 	if ('verbose' in kwargs): verbose = kwargs['verbose']
 	else: verbose = 0
 
-	# fixedAngleList is the list of buses that have a fixed angle and must not be changed during the powerFlow method.
-	for bus in case.busData: 
-		if bus.PVtype == 'VT':
-			 slackBusNumber = bus.number
-
 	# Initial guess: flat start
-	V = .9*np.ones(case.nBus)
+	V = np.ones(case.nBus)	
 	theta = np.zeros(case.nBus)
 
 	# P and Q are the vectors of injected bus power
@@ -65,17 +60,22 @@ def powerFlow(case,**kwargs):
 	# isP, isQ and isV are the matrixes/array that flag P, Q and V measures
 	isP = np.eye(case.nBus)
 	isV = np.zeros(case.nBus)
+	
+	for i in range(case.nBus):
+		if case.busData[i].PVtype == 'VT':
+			vtBusN = i
+			V[i] = case.busData[i].finalVoltage
+			theta[i] = case.busData[i].finalAngle
+			isV[i] = 1
+			theta = theta[i]*np.ones(case.nBus)
 
-	numP = int(isP.sum())
-	numV = int(isV.sum())
 
 	success = False
 
 	itCount = 0
-
+	#verbose = 2
 	# (5.6) Start time counte6
 	tstart = time.time()
-
 	# -------------------------------------------------
 	# STARTING NUMERICAL METHOD FOR POWER FLOW
 	# -------------------------------------------------
@@ -91,16 +91,26 @@ def powerFlow(case,**kwargs):
 		# Calculating mF.Jacobian
 		H = mF.Jac(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV)
 		H = np.delete(H,0,axis=0) # Removing slack bar angle derivatives for it is known
+		H = np.delete(H,4,axis=0) # Removing slack bar voltage derivatives for it is known
+
 		Z = mF.Z(P,Q,isP,V,isV)
 		h = mF.h(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV)
 
 		# Calculating state update
-		deltaSLC = np.delete(Z - h,0,axis=0)
+		deltaSLC = Z - h
+
+		deltaSLC = np.delete(deltaSLC,0,axis=0)
+		deltaSLC = np.delete(deltaSLC,case.nBus-1,axis=0)
+
 		dX = inv(H) @ deltaSLC
 	
 		# Updating V and theta
 		theta[1:] += dX[0:case.nBus-1 ,0]
-		V += dX[case.nBus-1:,0]
+		#V += dX[case.nBus-1:,0]
+		
+		V[1:] += dX[case.nBus:,0]
+	#	print('>>>> V = {}'.format(V))
+	#	print('>>>>> theta = {}'.format(theta))
 		
 		# Printing iteration results
 		if verbose > 1: print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[case.nBus-1: ,0]),dX[0: case.nBus-1,0]))

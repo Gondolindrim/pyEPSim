@@ -86,7 +86,7 @@ def loadCase(fileName,**kwargs):
 				raise dataCardError(' >> Netfile error: the endcard \'-999\' was not found when acquiring bus data')
 				break
 			else:
-				busList.append(cL.bus( 0, line[0], line[3], line[6], line[7], line[8], line[9], line[10], line[15]))
+				busList.append(cL.bus( 0, line[0], line[3], line[6], line[7], line[8], line[9], line[10], line[15],line[4],line[5]))
 		
 		# Reorganizing buses so the first bus is the slack
 		for i in range(len(busList)):

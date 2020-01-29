@@ -89,7 +89,13 @@ class case:
 			V, theta = array(['None']*self.nBus), array(['None']*self.nBus),
 
 		for k in range(self.nBus): self.busData[k].finalVoltage, self.busData[k].finalAngle = V[k], theta[k]
-		
+
+		for k in range(self.nBus):
+			if self.busData[k].PVtype == 'VT':
+				self.busData[k].pGen  = V[k]**2*self.G[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*cos(theta[k] - theta[m]) + self.B[k,m]*sin(theta[k] - theta[m])) for m in self.K[k]])
+				self.busData[k].qGen = -V[k]**2*self.bsh[k,k] + sum([ -V[k]**2*self.a[k,m]**2*(self.b[k,m] + self.bsh[k,m]) + self.a[m,k]*self.a[k,m]*V[k]*V[m]*( -self.g[k,m]*sin(theta[k] - theta[m]) + self.b[k,m]*cos(theta[k] - theta[m]) ) for m in self.K[k]])
+	
+
 # Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
 # case.branchData[1].r = 5
 # In this case the user has directly updated the value of a branch resistance; all matrixes must be re-calculated. Function updateMatrixes is called whenever case.r, case.x, case.a, case.bsh, case.K are called, so they are recalculated for the present values of bus and branch data.
@@ -190,8 +196,6 @@ class case:
 		Y3 = rCase.Y[nGen : nBus , 0 : nGen]
 		Y4 = rCase.Y[nGen : nBus+1 , nGen : nBus+1]
 
-		
-
 		Ylg = np.diag(Yload[0:nGen])
 
 		Yll = np.diag(Yload[nGen:nBus])
@@ -227,7 +231,7 @@ class case:
 		tabRows = []
 		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
 		for bus in self.busData:
-			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle*180/np.pi])
+			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 

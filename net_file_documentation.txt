@@ -17,7 +17,7 @@ BUS DATA COLUMNS:
 06 Final angle, degrees (F) *
 07 Load MW (F) *
 08 Load MVAR (F) *
-19 Generation MW (F) *
+09 Generation MW (F) *
 10 Generation MVAR (F) *
 11 Base KV (F)
 12 Desired volts (pu) (F) (This is desired remote voltage if this bus is controlling another bus.

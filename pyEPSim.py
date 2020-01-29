@@ -48,6 +48,7 @@ args = pA.parseArguments()
 verbose = args.verbose
 netFile = args.net
 
-case14 = lC.loadCase(netFile)
+case = lC.loadCase(netFile)
+case.runPowerFlow()
 
-case14.reduceMatrixes()
+print(case)
