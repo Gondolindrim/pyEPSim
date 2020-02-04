@@ -52,3 +52,5 @@ case = lC.loadCase(netFile)
 case.runPowerFlow()
 
 print(case)
+
+#print(case)

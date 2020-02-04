@@ -44,7 +44,7 @@ import libraries.powerFlow as pF
 # --> Y is the multi-dimensional thevenin equivalent susceptance of the grid.
 
 class case:
-	def __init__(self,name, busData,branchData,genData,faultData,Sb,Vb):
+	def __init__(self,name, busData,branchData,genData,faultData,Sb,Vb, vtBusN = -1):
 		self.name = name
 		self.busData = busData
 		self.branchData = branchData
@@ -85,15 +85,17 @@ class case:
 	def runPowerFlow(self):
 		V, theta, r, elapsed, itCount, success = pF.powerFlow(self)
 		if not success:
-			print(' >>> Power flow update for case class instance returned not successful.')
+			print(' >>> Power flow update for case class instance returned not successful because the power flow method did not converge.')
 			V, theta = array(['None']*self.nBus), array(['None']*self.nBus),
 
-		for k in range(self.nBus): self.busData[k].finalVoltage, self.busData[k].finalAngle = V[k], theta[k]
+		else:
+			for k in range(self.nBus): self.busData[k].finalVoltage, self.busData[k].finalAngle = V[k], theta[k]
 
-		for k in range(self.nBus):
-			if self.busData[k].PVtype == 'VT':
-				self.busData[k].pGen  = V[k]**2*self.G[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*cos(theta[k] - theta[m]) + self.B[k,m]*sin(theta[k] - theta[m])) for m in self.K[k]])
-				self.busData[k].qGen = -V[k]**2*self.bsh[k,k] + sum([ -V[k]**2*self.a[k,m]**2*(self.b[k,m] + self.bsh[k,m]) + self.a[m,k]*self.a[k,m]*V[k]*V[m]*( -self.g[k,m]*sin(theta[k] - theta[m]) + self.b[k,m]*cos(theta[k] - theta[m]) ) for m in self.K[k]])
+			for k in range(self.nBus):
+				if self.busData[k].PVtype == 'VT':
+					print(V[k])
+					self.busData[k].pGen  = V[k]**2*self.G[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*cos(theta[k] - theta[m]) + self.B[k,m]*sin(theta[k] - theta[m])) for m in self.K[k]])
+					self.busData[k].qGen = -V[k]**2*self.bsh[k,k] + sum([ -V[k]**2*self.a[k,m]**2*(self.b[k,m] + self.bsh[k,m]) + self.a[m,k]*self.a[k,m]*V[k]*V[m]*( -self.g[k,m]*sin(theta[k] - theta[m]) + self.b[k,m]*cos(theta[k] - theta[m]) ) for m in self.K[k]])
 	
 
 # Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:

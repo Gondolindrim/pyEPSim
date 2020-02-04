@@ -59,16 +59,25 @@ def powerFlow(case,**kwargs):
 
 	# isP, isQ and isV are the matrixes/array that flag P, Q and V measures
 	isP = np.eye(case.nBus)
-	isV = np.zeros(case.nBus)
+	isQ = np.eye(case.nBus)
+	isV = np.ones(case.nBus)
+	isT = np.ones(case.nBus)
 	
 	for i in range(case.nBus):
 		if case.busData[i].PVtype == 'VT':
-			vtBusN = i
 			V[i] = case.busData[i].finalVoltage
 			theta[i] = case.busData[i].finalAngle
-			isV[i] = 1
+			isV[i] = 0
+			isT[i] = 0
 			theta = theta[i]*np.ones(case.nBus)
-
+			isP[i,i] = 0
+		if case.busData[i].PVtype == 'PV':
+			V[i] = case.busData[i].finalVoltage
+			isV[i] = 0
+			isP[i,i] = 0
+		if case.busData[i].PVtype == 'PQ':
+			isP[i,i] = 0
+			isQ[i,i] = 0
 
 	success = False
 
@@ -89,9 +98,7 @@ def powerFlow(case,**kwargs):
 		if verbose > 1: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 		
 		# Calculating mF.Jacobian
-		H = mF.Jac(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV)
-		H = np.delete(H,0,axis=0) # Removing slack bar angle derivatives for it is known
-		H = np.delete(H,4,axis=0) # Removing slack bar voltage derivatives for it is known
+		H = mF.Jac(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV,isT)
 
 		Z = mF.Z(P,Q,isP,V,isV)
 		h = mF.h(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV)
@@ -99,19 +106,19 @@ def powerFlow(case,**kwargs):
 		# Calculating state update
 		deltaSLC = Z - h
 
-		deltaSLC = np.delete(deltaSLC,0,axis=0)
-		deltaSLC = np.delete(deltaSLC,case.nBus-1,axis=0)
-
 		dX = inv(H) @ deltaSLC
 	
 		# Updating V and theta
-		theta[1:] += dX[0:case.nBus-1 ,0]
-		#V += dX[case.nBus-1:,0]
-		
-		V[1:] += dX[case.nBus:,0]
-	#	print('>>>> V = {}'.format(V))
-	#	print('>>>>> theta = {}'.format(theta))
-		
+		i = 0
+		for j in range(case.nBus):
+			if isT[j]:
+				theta[j] += dX[i]
+				i+=1
+		for j in range(case.nBus):
+			if isV[j]:
+				V[j] += dX[i]
+				i+=1
+
 		# Printing iteration results
 		if verbose > 1: print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[case.nBus-1: ,0]),dX[0: case.nBus-1,0]))
 

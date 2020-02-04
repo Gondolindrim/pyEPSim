@@ -89,12 +89,12 @@ def loadCase(fileName,**kwargs):
 				busList.append(cL.bus( 0, line[0], line[3], line[6], line[7], line[8], line[9], line[10], line[15],line[4],line[5]))
 		
 		# Reorganizing buses so the first bus is the slack
-		for i in range(len(busList)):
-			if busList[i].PVtype == 'VT':
-				busList[i], busList[0] = busList[0], busList[i]
-				break
-		else:
-			raise dataCardError (' >> Netfile error: no VT bus was found! Please assign a reference bus.')
+	#	for i in range(len(busList)):
+	#		if busList[i].PVtype == 'VT':
+	#			busList[i], busList[0] = busList[0], busList[i]
+	#			break
+	#	else:
+	#		raise dataCardError (' >> Netfile error: no VT bus was found! Please assign a reference bus.')
 
 		# i is the bus number counter. It is used to assign the bus numbers that will be used by the program; bus numbers are assigned in the order they appear in the netfile.
 		for i in range(len(busList)): busList[i].number = i

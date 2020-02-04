@@ -26,120 +26,133 @@ pi = np.pi
 from copy import deepcopy
 copy = deepcopy
 
-def dPdT(V,theta,K,a,y,Y,bsh,isP): #{{{1
+def dPdT(V,theta,K,a,y,Y,bsh,isP,isT): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
 	b = imag(copy(y))
 	numP = int(isP.sum())
+	numT = int(isT.sum())
 	nbus = len(isP)
-	H = np.empty((numP, nbus))	# Preallocating
+	H = np.empty((numP, numT))	# Preallocating
 	i = 0	# Starting counter
-	for j in range(nbus):	
+	for j in range(nbus):
 		for n in range(nbus):
 			if isP[j,n]:
+				p = 0
 				for k in range(nbus):
-					if j==n: # If measuring power injection
-						if k==j: # If calculating on angle j
-							H[i,k] = V[j]*sum([V[m]*(-G[j,m]*sin(theta[j] - theta[m]) + B[j,m]*cos(theta[j] - theta[m])) for m in K[j]])
-						elif (k in K[j]): # If calculating on angle k, n and j are connected
-							H[i,k] = V[j]*V[k]*(G[j,k]*sin(theta[j] - theta[k]) - B[j,k]*cos(theta[j] - theta[k]))
-						else: # If n and j are not connected
-							H[i,k] = 0
-					else:	# If measuring power flow
-						if k!=j and k!=n: # Since power transfer is function of only angles j and n
-							H[i,k] = 0
-						else:
-							if k==j: H[i,k] = V[j]*V[n]*a[j,n]*a[n,j]*(  g[j,n]*sin(theta[j] - theta[n]) - b[j,n]*cos(theta[j] - theta[n]))
-							else: H[i,k] =    V[j]*V[n]*a[j,n]*a[n,j]*( -g[j,n]*sin(theta[j] - theta[n]) + b[j,n]*cos(theta[j] - theta[n]))
-							
+					if isT[k]:
+						if j==n: # If measuring power injection
+							if k==j: # If calculating on angle j
+								H[i,p] = V[j]*sum([V[m]*(-G[j,m]*sin(theta[j] - theta[m]) + B[j,m]*cos(theta[j] - theta[m])) for m in K[j]])
+							elif (k in K[j]): # If calculating on angle k, n and j are connected
+								H[i,p] = V[j]*V[k]*(G[j,k]*sin(theta[j] - theta[k]) - B[j,k]*cos(theta[j] - theta[k]))
+							else: # If n and j are not connected
+								H[i,p] = 0
+						else:	# If measuring power flow
+							if k!=j and k!=n: # Since power transfer is function of only angles j and n
+								H[i,p] = 0
+							else:
+								if k==j: H[i,p] = V[j]*V[n]*a[j,n]*a[n,j]*(  g[j,n]*sin(theta[j] - theta[n]) - b[j,n]*cos(theta[j] - theta[n]))
+								else: H[i,p] =    V[j]*V[n]*a[j,n]*a[n,j]*( -g[j,n]*sin(theta[j] - theta[n]) + b[j,n]*cos(theta[j] - theta[n]))
+						#print(' --> dPdT[{},{}] = dP({},{})/dT({})'.format(i,k,j,n,k))
+						p+=1
 				i+=1
 	# Deleting the reference bar
-	H = np.delete(H,0,axis=1)
+	#print(H)
 	return H
 
-def dPdV(V,theta,K,a,y,Y,bsh,isP):#{{{1
+def dPdV(V,theta,K,a,y,Y,bsh,isP,isV):#{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
 	b = imag(copy(y))
 	numP = int(isP.sum())
+	numV = int(isV.sum())
 	nbus = len(isP)
-	N = np.empty((numP, nbus))
+	N = np.empty((numP, numV))
 	i = 0
 	for j in range(nbus):	
 		for n in range(nbus):
 			if isP[j,n]:
+				p = 0
 				for k in range(nbus):
-					if j==n:
-						if k==j: 
-							N[i,k] = 2*V[j]*G[j,j] + sum([V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
-						elif k in K[j]: 
-							N[i,k] = V[j]*(G[j,k]*cos(theta[j] - theta[k]) + B[j,k]*sin(theta[j] - theta[k]))
-						else: N[i,k] = 0
-					else:
-						if k!=j and k!=n:
-							N[i,k] = 0
+					if isV[k]:
+						if j==n:
+							if k==j: N[i,p] = 2*V[j]*G[j,j] + sum([V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
+							elif k in K[j]: N[i,p] = V[j]*(G[j,k]*cos(theta[j] - theta[k]) + B[j,k]*sin(theta[j] - theta[k]))
+							else: N[i,p] = 0
 						else:
-							if k == j: N[i,k] = 2*a[j,n]*V[j]*g[j,n] - a[j,n]*a[n,j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
-							else: N[i,k] = -a[j,n]*a[n,j]*V[j]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+							if k!=j and k!=n: N[i,p] = 0
+							else:
+								if k == j: N[i,p] = 2*a[j,n]*V[j]*g[j,n] - a[j,n]*a[n,j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+								else: N[i,p] = -a[j,n]*a[n,j]*V[j]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+						#print(' --> dPdV[{},{}] = dP({},{})/dV({}) = {}'.format(i,p,j,n,k,N[i,p]))
+						p+=1
 				i+=1
+	#print(N)
 	return N
 
-def dQdT(V,theta,K,a,y,Y,bsh,isP): #{{{1
+def dQdT(V,theta,K,a,y,Y,bsh,isP,isT): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
 	b = imag(copy(y))
 	numP = int(isP.sum())
+	numT = int(isT.sum())
 	nbus = len(isP)
-	M = np.empty((numP, nbus))
+	M = np.empty((numP, numT))
 	i = 0
-	for j in range(nbus):	
+	for j in range(nbus):
 		for n in range(nbus):
 			if isP[j,n]:
+				p = 0
 				for k in range(nbus):
-					if j==n: # If measuring power injection
-						if j==k: # If calculating on angle j
-							M[i,k] = V[j]*sum([V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
-						elif (k in K[j] and k!=j):
-							M[i,k] = -V[j]*V[k]*(G[j,k]*cos(theta[j] - theta[k]) + B[j,k]*sin(theta[j] - theta[k]))
-						else: M[i,k] = 0
-					else:
-						if k!=j and k!=n: #Since power transfer is function of only angles j and n
-							M[i,k] = 0
+					if isT[k]:
+						if j==n: # If measuring power injection
+							if j==k: M[i,p] = V[j]*sum([V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
+							elif (k in K[j] and k!=j): M[i,p] = -V[j]*V[k]*(G[j,k]*cos(theta[j] - theta[k]) + B[j,k]*sin(theta[j] - theta[k]))
+							else: M[i,p] = 0
 						else:
-							if k == j: M[i,k] = -a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
-							else: M[i,k] = a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
-							
+							if k!=j and k!=n: M[i,p] = 0
+							else:
+								if k == j: M[i,p] = -a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+								else: M[i,p] = a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+						#print(' --> dQdT[{},{}] = dQ({},{})/dT({}) = {}'.format(i,p,j,n,k,M[i,p]))
+						p+=1				
 				i+=1
-	M = np.delete(M,0,axis=1)
+	#print(M)
 	return M
 
-def dQdV(V,theta,K,a,y,Y,bsh,isP): #{{{1
+def dQdV(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
 	b = imag(copy(y))
 	numP = int(isP.sum())
+	numV = int(isV.sum())
 	nbus = len(isP)
-	L = np.ones((numP, nbus))
+	L = np.ones((numP, numV))
 	i = 0
 	for j in range(nbus):	
 		for n in range(nbus):
 			if isP[j,n]:
+				p = 0
 				for k in range(nbus):
-					if j==n: # If measuring power injection
-						if j==k: L[i,k] = -2*V[j]*B[j,j] + sum([V[m]*(G[j,m]*sin(theta[j] - theta[m]) - B[j,m]*cos(theta[j] - theta[m])) for m in K[j]])
-						elif (k in K[j]): L[i,k] = V[j]*(G[j,k]*sin(theta[j] - theta[k]) - B[j,k]*cos(theta[j] - theta[k]))
-						else: L[i,k] = 0
-					else:
-						if k!=j and k!=n: #Since power transfer is function of only voltages j and n
-							L[i,k] = 0
+					if isV[k]:
+						if j==n:
+							if j==k: L[i,p] = -2*V[j]*B[j,j] + sum([V[m]*(G[j,m]*sin(theta[j] - theta[m]) - B[j,m]*cos(theta[j] - theta[m])) for m in K[j]])
+							elif (k in K[j]): L[i,p] = V[j]*(G[j,k]*sin(theta[j] - theta[k]) - B[j,k]*cos(theta[j] - theta[k]))
+							else: L[i,p] = 0
 						else:
-							if k == j: L[i,k] = -2*a[j,n]**2*V[j]*(b[j,n] + bsh[j,n]) + a[j,n]*a[n,j]*V[n]*(b[j,n]*cos(theta[j] - theta[n]) - g[j,n]*sin(theta[j] - theta[n]))
-							else: L[i,k] = a[j,n]*a[n,j]*V[j]*(b[j,n]*cos(theta[j] - theta[n]) - g[j,n]*sin(theta[j] - theta[n]))
-				i += 1
+							if k!=j and k!=n: L[i,p] = 0
+							else:
+								if k == j: L[i,p] = -2*a[j,n]**2*V[j]*(b[j,n] + bsh[j,n]) + a[j,n]*a[n,j]*V[n]*(b[j,n]*cos(theta[j] - theta[n]) - g[j,n]*sin(theta[j] - theta[n]))
+								else: L[i,p] = a[j,n]*a[n,j]*V[j]*(b[j,n]*cos(theta[j] - theta[n]) - g[j,n]*sin(theta[j] - theta[n]))
+						#print(' --> dQdV[{},{}] = dQ({},{})/dV({}) = {}'.format(i,p,j,n,k,L[i,p]))
+						p+=1
+				i+=1
+	#print(L)
 	return L
 
 def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
@@ -148,9 +161,8 @@ def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 	g = real(copy(y))
 	b = imag(copy(y))
 	numP = int(isP.sum())
-	numV = int(isV.sum())
 	nbus = len(isP)
-	h = np.zeros((2*numP + numV,1))
+	h = np.zeros((2*numP,1))
 	i = 0
 	for j in range(nbus):	
 		for n in range(nbus):
@@ -170,11 +182,6 @@ def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 				else:
 					h[i] =  -V[j]**2*a[j,n]**2*(b[j,n] + bsh[j,n]) + a[n,j]*a[j,n]*V[j]*V[n]*( -g[j,n]*sin(theta[j] - theta[n]) + b[j,n]*cos(theta[j] - theta[n]) )
 				i +=1
-
-	for j in range(nbus):	
-		if isV[j]:
-			h[i] = V[j]
-			i += 1
 	return h
 
 def Z(P,Q,isP,V,isV): #{{{1
@@ -182,7 +189,7 @@ def Z(P,Q,isP,V,isV): #{{{1
 	numV = int(isV.sum())
 	nbus = int(len(V))
 	i=0
-	Z = np.empty((2*numP + numV,1))
+	Z = np.empty((2*numP,1))
 	for j in range(nbus):	
 		for n in range(nbus):
 			if isP[j,n]:
@@ -193,32 +200,23 @@ def Z(P,Q,isP,V,isV): #{{{1
 			if isP[j,n]:
 				Z[i] = Q[j,n]
 				i += 1
-
-	for j in range(nbus):	
-		if isV[j]:
-			Z[i] = V[j]
-			i += 1
-
 	return Z
 
-def Jac(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
+def Jac(V,theta,K,a,y,Y,bsh,isP,isV,isT): #{{{1
 
-	nbus = len(isP)
 	numP = isP.sum()
 	numV = isV.sum()
+	numT = isT.sum()
 
-	H = dPdT(V,theta,K,a,y,Y,bsh,isP)
-	N = dPdV(V,theta,K,a,y,Y,bsh,isP)
-	M = dQdT(V,theta,K,a,y,Y,bsh,isP)
-	L = dQdV(V,theta,K,a,y,Y,bsh,isP)
+	nbus = len(isP)
 
-	O = np.identity(nbus)
-	deleteList = array([i for i in range(nbus) if isV[i]==0])
-	O = np.delete(O,deleteList,axis=0) # Deleting non-V measures
-	O = conc((np.zeros((O.shape[0],O.shape[1]-1)),O),axis=1)
+	H = dPdT(V,theta,K,a,y,Y,bsh,isP,isT)
+	N = dPdV(V,theta,K,a,y,Y,bsh,isP,isV)
+	M = dQdT(V,theta,K,a,y,Y,bsh,isP,isT)
+	L = dQdV(V,theta,K,a,y,Y,bsh,isP,isV)
 
 	dP = conc(( H, N),axis=1)
 	dQ = conc(( M, L),axis=1)
 	dPdQ = conc((dP,dQ),axis=0)
 	
-	return conc((dPdQ,O),axis=0)
+	return dPdQ
