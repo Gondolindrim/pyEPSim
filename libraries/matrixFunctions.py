@@ -53,8 +53,8 @@ def dPdT(V,theta,K,a,y,Y,bsh,isP,isT): #{{{1
 							if k!=j and k!=n: # Since power transfer is function of only angles j and n
 								H[i,p] = 0
 							else:
-								if k==j: H[i,p] = V[j]*V[n]*a[j,n]*a[n,j]*(  g[j,n]*sin(theta[j] - theta[n]) - b[j,n]*cos(theta[j] - theta[n]))
-								else: H[i,p] =    V[j]*V[n]*a[j,n]*a[n,j]*( -g[j,n]*sin(theta[j] - theta[n]) + b[j,n]*cos(theta[j] - theta[n]))
+								if k==j: H[i,p] = V[j]*V[n]*a[j,n]*a[n,j]*(  g[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]) - b[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
+								else: H[i,p] =    V[j]*V[n]*a[j,n]*a[n,j]*( -g[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
 						#print(' --> dPdT[{},{}] = dP({},{})/dT({})'.format(i,k,j,n,k))
 						p+=1
 				i+=1
@@ -85,8 +85,8 @@ def dPdV(V,theta,K,a,y,Y,bsh,isP,isV):#{{{1
 						else:
 							if k!=j and k!=n: N[i,p] = 0
 							else:
-								if k == j: N[i,p] = 2*a[j,n]*V[j]*g[j,n] - a[j,n]*a[n,j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
-								else: N[i,p] = -a[j,n]*a[n,j]*V[j]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+								if k == j: N[i,p] = 2*a[j,n]**2*V[j]*g[j,n] - a[j,n]*a[n,j]*V[n]*(g[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
+								else: N[i,p] = -a[j,n]*a[n,j]*V[j]*(g[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
 						#print(' --> dPdV[{},{}] = dP({},{})/dV({}) = {}'.format(i,p,j,n,k,N[i,p]))
 						p+=1
 				i+=1
@@ -110,14 +110,14 @@ def dQdT(V,theta,K,a,y,Y,bsh,isP,isT): #{{{1
 				for k in range(nbus):
 					if isT[k]:
 						if j==n: # If measuring power injection
-							if j==k: M[i,p] = V[j]*sum([V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
+							if j==k: M[i,p] = V[j]*sum([V[m]*(G[j,m]*cos(theta[j] - theta[m] + phi[j,n] - phi[n,j]) + B[j,m]*sin(theta[j] - theta[m] + phi[j,n] - phi[n,j])) for m in K[j]])
 							elif (k in K[j] and k!=j): M[i,p] = -V[j]*V[k]*(G[j,k]*cos(theta[j] - theta[k]) + B[j,k]*sin(theta[j] - theta[k]))
 							else: M[i,p] = 0
 						else:
 							if k!=j and k!=n: M[i,p] = 0
 							else:
-								if k == j: M[i,p] = -a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
-								else: M[i,p] = a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+								if k == j: M[i,p] = -a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
+								else: M[i,p] = a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
 						#print(' --> dQdT[{},{}] = dQ({},{})/dT({}) = {}'.format(i,p,j,n,k,M[i,p]))
 						p+=1				
 				i+=1

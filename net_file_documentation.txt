@@ -6,13 +6,12 @@ F = float
 BUS DATA COLUMNS:
 
 01 Name (S)*
-02 Load flow area number (I) Don't use zero!
+02 Load flow area number (I)
 03 Loss zone number (I)
-04 Type (S) *
-	UN - Unregulated (load, PQ)
-	PQ - Hold MVAR generation within voltage limits, (PQ)
-	PV - Hold voltage within VAR limits (gen, PV)
-	VT - Hold voltage and angle (swing, V-Theta) (must always have exactly one)
+04 Type (S) )
+	PQ - Hold MVAR generation
+	PV - Hold voltage and MW generation
+	VT - Hold voltage and angle (must always have one)
 05 Final voltage, p.u. (F) *
 06 Final angle, degrees (F) *
 07 Load MW (F) *
@@ -23,8 +22,8 @@ BUS DATA COLUMNS:
 12 Desired volts (pu) (F) (This is desired remote voltage if this bus is controlling another bus.
 13 Maximum MVAR or voltage limit (F)
 14 Minimum MVAR or voltage limit (F)
-15 Shunt conductance G (per unit) (F) *
-16 Shunt susceptance B (per unit) (F) *
+15 Shunt conductance (per unit) (F) *
+16 Shunt susceptance (per unit) (F) *
 17 Remote controlled bus number
 
 -------------------------------------------------
