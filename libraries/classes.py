@@ -44,7 +44,7 @@ import libraries.powerFlow as pF
 # --> Y is the multi-dimensional thevenin equivalent susceptance of the grid.
 
 class case:
-	def __init__(self,name, busData,branchData,genData,faultData,Sb,Vb, vtBusN = -1):
+	def __init__(self,name, busData,branchData,genData,faultData,Sb,Vb):
 		self.name = name
 		self.busData = busData
 		self.branchData = branchData
@@ -56,7 +56,7 @@ class case:
 		self.nBus = len(self.busData)
 		self.nGen = len(self.genData)
 
-		self.r, self.x, self.a, self.bsh, self.K  = self.updateMatrixes()		
+		self.r, self.x, self.a, self.phi, self.bsh, self.K  = self.updateMatrixes()		
 		self.z = array([[self.r[m,n] + 1j*self.x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
 		self.y = array([[1/self.z[m,n] if self.z[m,n] != 0 else 0 for m in range(self.nBus)] for n in range(self.nBus)])
 		self.g = real(copy(self.y))
@@ -77,7 +77,6 @@ class case:
 		self.printBranchData()
 		self.printGenData()
 		self.printFaultData()
-
 
 		return ''
 
@@ -106,6 +105,7 @@ class case:
 		x = np.zeros((self.nBus,self.nBus))
 		a = np.ones((self.nBus,self.nBus))
 		bsh = np.zeros((self.nBus,self.nBus))
+		phi = np.zeros((self.nBus,self.nBus))
 		K = [ [] for i in range(self.nBus)]
 		
 		for branch in self.branchData:
@@ -121,12 +121,14 @@ class case:
 			bsh[branch.fromBus,branch.toBus] = branch.bsh	
 			bsh[branch.toBus,branch.fromBus] = branch.bsh
 
+			phi[branch.fromBus,branch.toBus] = branch.phi
+
 			if branch.a != 0: a[branch.fromBus,branch.toBus] = branch.a
 
 		for k in range(self.nBus):
 			bsh[k,k] = self.busData[k].bsh
 
-		return r,x,a,bsh,K
+		return r,x,a,phi,bsh,K
 
 # Method case.buildY builds the admittance matrix Y of the system
 	def buildY(self):
@@ -164,7 +166,6 @@ class case:
 					equiv[k] = equiv[i]
 					equiv[i] = temp
 					break
-
 		
 		P = np.zeros((nBus,nBus))
 		print(array([ i for i in range(nBus)]))
@@ -243,9 +244,9 @@ class case:
 
 		print('\n >> Case \'{0}\' branch list'.format(self.name))
 		tabRows = []
-		tabHeader = ['Number','From Bus\n(Tap bus)', 'To Bus\n(Z bus)', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)']
+		tabHeader = ['Number','From Bus\n(Tap bus)', 'To Bus\n(Z bus)', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)', 'Transformer\nphase shift (phi)']
 		for branch in self.branchData:
-			tabRows.append([branch.number,self.busData[branch.fromBus].name, self.busData[branch.toBus].name, branch.r, branch.x, branch.bsh, branch.a])
+			tabRows.append([branch.number,self.busData[branch.fromBus].name, self.busData[branch.toBus].name, branch.r, branch.x, branch.bsh, branch.a,branch.phi*180/np.pi])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -316,8 +317,9 @@ class bus:
 #--> "r"  and "x" are respectively the equivalent resistance and reactance of the branch.
 #--> "bsh" is the shunt susceptance of the branch according to the pi model
 #--> "a" is the turns ratio of the transformer attached to the branch when there is one.
+#--> "phi" is the a
 class branch:
-	def __init__(self,number,fromBus,toBus,r,x,bsh,a):
+	def __init__(self,number,fromBus,toBus,r,x,bsh,a,phi):
 		self.number = int(number)
 		self.fromBus = int(fromBus)
 		self.toBus = int(toBus)
@@ -325,6 +327,7 @@ class branch:
 		self.x = float(x)
 		self.bsh = float(bsh)
 		self.a = float(a)
+		self.phi = float(phi)
 
 # (4) Generator object {{{1
 # The generator object stores the parameters of a given generator. Generators are modelled as synchronous machines:

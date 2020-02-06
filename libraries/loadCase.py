@@ -131,8 +131,9 @@ def loadCase(fileName,**kwargs):
 					raise dataCardError(' >> Netfile error: there is a branch declared with non-declared Z bus \'{0}\''.format(line[1]))
 					break
 
-				if float(line[14]) != 0: branchList.append(cL.branch(0, fromBus,toBus,line[6],line[7],line[8],1/float(line[14])))
-				else: branchList.append(cL.branch(0,fromBus,toBus,line[6],line[7],line[8],1))
+				if float(line[14]) == 0: 
+					raise dataCardError(' >> Netfile error: branch from bus \'{}\' to bus \'{}\' has a turns ratio of 0.'.format(busList[fromBus].name,busList[toBus].name))
+				else: branchList.append(cL.branch(0,fromBus,toBus,line[6],line[7],line[8],line[14],float(line[15])*np.pi/180))
 
 		# Just likle with the buses, i is the branch number counter. It is used to assign the branch numbers that will be used by the program; branch numbers are assigned in the order they appear in the netfile.
 		for i in range(len(branchList)): branchList[i].number = i

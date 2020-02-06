@@ -8,7 +8,7 @@ BUS DATA COLUMNS:
 01 Name (S)*
 02 Load flow area number (I)
 03 Loss zone number (I)
-04 Type (S) )
+04 Type (S)
 	PQ - Hold MVAR generation
 	PV - Hold voltage and MW generation
 	VT - Hold voltage and angle (must always have one)
@@ -52,7 +52,7 @@ BRANCH DATA COLUMNS
 	1 - Controlled bus is near the tap side
 	2 - Controlled bus is near the impedance side (Z bus)
 15 Transformer final turns ratio (F)
-16 Transformer (phase shifter) final angle (F)
+16 Transformer (phase shifter) final angle in degrees (F)
 17 Minimum tap or phase shift (F)
 18 Maximum tap or phase shift (F)
 19 Step size (F)

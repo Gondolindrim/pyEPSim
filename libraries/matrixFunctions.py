@@ -26,7 +26,7 @@ pi = np.pi
 from copy import deepcopy
 copy = deepcopy
 
-def dPdT(V,theta,K,a,y,Y,bsh,isP,isT): #{{{1
+def dPdT(V,theta,K,a,phi,y,Y,bsh,isP,isT): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
@@ -55,14 +55,14 @@ def dPdT(V,theta,K,a,y,Y,bsh,isP,isT): #{{{1
 							else:
 								if k==j: H[i,p] = V[j]*V[n]*a[j,n]*a[n,j]*(  g[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]) - b[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
 								else: H[i,p] =    V[j]*V[n]*a[j,n]*a[n,j]*( -g[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
-						#print(' --> dPdT[{},{}] = dP({},{})/dT({})'.format(i,k,j,n,k))
+						print(' --> dPdT[{},{}] = dP({},{})/dT({})'.format(i,k,j,n,k))
 						p+=1
 				i+=1
 	# Deleting the reference bar
-	#print(H)
+	print(H)
 	return H
 
-def dPdV(V,theta,K,a,y,Y,bsh,isP,isV):#{{{1
+def dPdV(V,theta,K,a,phi,y,Y,bsh,isP,isV):#{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
@@ -93,19 +93,19 @@ def dPdV(V,theta,K,a,y,Y,bsh,isP,isV):#{{{1
 	#print(N)
 	return N
 
-def dQdT(V,theta,K,a,y,Y,bsh,isP,isT): #{{{1
+def dQdT(V,theta,K,a,phi,y,Y,bsh,isQ,isT): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
 	b = imag(copy(y))
-	numP = int(isP.sum())
+	numQ = int(isQ.sum())
 	numT = int(isT.sum())
-	nbus = len(isP)
-	M = np.empty((numP, numT))
+	nbus = len(isQ)
+	M = np.empty((numQ, numT))
 	i = 0
 	for j in range(nbus):
 		for n in range(nbus):
-			if isP[j,n]:
+			if isQ[j,n]:
 				p = 0
 				for k in range(nbus):
 					if isT[k]:
@@ -124,19 +124,19 @@ def dQdT(V,theta,K,a,y,Y,bsh,isP,isT): #{{{1
 	#print(M)
 	return M
 
-def dQdV(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
+def dQdV(V,theta,K,a,phi,y,Y,bsh,isQ,isV): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
 	b = imag(copy(y))
-	numP = int(isP.sum())
+	numP = int(isQ.sum())
 	numV = int(isV.sum())
-	nbus = len(isP)
+	nbus = len(isQ)
 	L = np.ones((numP, numV))
 	i = 0
 	for j in range(nbus):	
 		for n in range(nbus):
-			if isP[j,n]:
+			if isQ[j,n]:
 				p = 0
 				for k in range(nbus):
 					if isV[k]:
@@ -155,14 +155,15 @@ def dQdV(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 	#print(L)
 	return L
 
-def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
+def h(V,theta,K,a,phi,y,Y,bsh,isP,isQ,isV): #{{{1
 	G = real(copy(Y))
 	B = imag(copy(Y))
 	g = real(copy(y))
 	b = imag(copy(y))
 	numP = int(isP.sum())
+	numQ = int(isQ.sum())
 	nbus = len(isP)
-	h = np.zeros((2*numP,1))
+	h = np.zeros((numP + numQ,1))
 	i = 0
 	for j in range(nbus):	
 		for n in range(nbus):
@@ -176,7 +177,7 @@ def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 				
 	for j in range(nbus):	
 		for n in range(nbus):
-			if isP[j,n]:
+			if isQ[j,n]:
 				if j==n:
 					h[i] = -V[j]**2*bsh[j,j] + sum([ -V[j]**2*a[j,m]**2*(b[j,m] + bsh[j,m]) + a[m,j]*a[j,m]*V[j]*V[m]*( -g[j,m]*sin(theta[j] - theta[m]) + b[j,m]*cos(theta[j] - theta[m]) ) for m in K[j]])
 				else:
@@ -184,12 +185,12 @@ def h(V,theta,K,a,y,Y,bsh,isP,isV): #{{{1
 				i +=1
 	return h
 
-def Z(P,Q,isP,V,isV): #{{{1
+def Z(P,Q,isP,isQ): #{{{1
 	numP = int(isP.sum())
-	numV = int(isV.sum())
-	nbus = int(len(V))
+	numQ = int(isQ.sum())
+	nbus = int(len(isP))
 	i=0
-	Z = np.empty((2*numP,1))
+	Z = np.empty((numP + numQ,1))
 	for j in range(nbus):	
 		for n in range(nbus):
 			if isP[j,n]:
@@ -197,23 +198,24 @@ def Z(P,Q,isP,V,isV): #{{{1
 				i+=1
 	for j in range(nbus):	
 		for n in range(nbus):
-			if isP[j,n]:
+			if isQ[j,n]:
 				Z[i] = Q[j,n]
 				i += 1
 	return Z
 
-def Jac(V,theta,K,a,y,Y,bsh,isP,isV,isT): #{{{1
+def Jac(V,theta,K,a,phi,y,Y,bsh,isP,isQ,isV,isT): #{{{1
 
 	numP = isP.sum()
+	numQ = isQ.sum()
 	numV = isV.sum()
 	numT = isT.sum()
 
 	nbus = len(isP)
 
-	H = dPdT(V,theta,K,a,y,Y,bsh,isP,isT)
-	N = dPdV(V,theta,K,a,y,Y,bsh,isP,isV)
-	M = dQdT(V,theta,K,a,y,Y,bsh,isP,isT)
-	L = dQdV(V,theta,K,a,y,Y,bsh,isP,isV)
+	H = dPdT(V,theta,K,a,phi,y,Y,bsh,isP,isT)
+	N = dPdV(V,theta,K,a,phi,y,Y,bsh,isP,isV)
+	M = dQdT(V,theta,K,a,phi,y,Y,bsh,isQ,isT)
+	L = dQdV(V,theta,K,a,phi,y,Y,bsh,isQ,isV)
 
 	dP = conc(( H, N),axis=1)
 	dQ = conc(( M, L),axis=1)

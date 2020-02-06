@@ -71,6 +71,7 @@ def powerFlow(case,**kwargs):
 			isT[i] = 0
 			theta = theta[i]*np.ones(case.nBus)
 			isP[i,i] = 0
+			isQ[i,i] = 0
 		if case.busData[i].PVtype == 'PV':
 			V[i] = case.busData[i].finalVoltage
 			isV[i] = 0
@@ -82,7 +83,7 @@ def powerFlow(case,**kwargs):
 	success = False
 
 	itCount = 0
-	#verbose = 2
+	verbose = 2
 	# (5.6) Start time counte6
 	tstart = time.time()
 	# -------------------------------------------------
@@ -98,10 +99,11 @@ def powerFlow(case,**kwargs):
 		if verbose > 1: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 		
 		# Calculating mF.Jacobian
-		H = mF.Jac(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV,isT)
+		H = mF.Jac(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV,isT)
+		print(H)
 
-		Z = mF.Z(P,Q,isP,V,isV)
-		h = mF.h(V,theta,case.K,case.a,case.y,case.Y,case.bsh,isP,isV)
+		Z = mF.Z(P,Q,isP,isQ)
+		h = mF.h(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV)
 
 		# Calculating state update
 		deltaSLC = Z - h

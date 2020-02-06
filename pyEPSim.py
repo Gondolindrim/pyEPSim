@@ -49,6 +49,8 @@ verbose = args.verbose
 netFile = args.net
 
 case = lC.loadCase(netFile)
+print(case)
+
 case.runPowerFlow()
 
 print(case)
