@@ -91,10 +91,10 @@ class case:
 			for k in range(self.nBus): self.busData[k].finalVoltage, self.busData[k].finalAngle = V[k], theta[k]
 
 			for k in range(self.nBus):
-				if self.busData[k].PVtype == 'VT':
-					print(V[k])
-					self.busData[k].pGen  = V[k]**2*self.G[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*cos(theta[k] - theta[m]) + self.B[k,m]*sin(theta[k] - theta[m])) for m in self.K[k]])
-					self.busData[k].qGen = -V[k]**2*self.bsh[k,k] + sum([ -V[k]**2*self.a[k,m]**2*(self.b[k,m] + self.bsh[k,m]) + self.a[m,k]*self.a[k,m]*V[k]*V[m]*( -self.g[k,m]*sin(theta[k] - theta[m]) + self.b[k,m]*cos(theta[k] - theta[m]) ) for m in self.K[k]])
+				self.busData[k].pGen  = V[k]**2*self.G[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*cos(theta[k] - theta[m]) + self.B[k,m]*sin(theta[k] - theta[m])) for m in self.K[k]])
+				self.busData[k].pGen = np.round(self.busData[k].pGen*1e10)/1e10
+				self.busData[k].qGen = -V[k]**2*self.B[k,k] + sum([ V[m]*(self.G[k,m]*sin(theta[k] - theta[m]) - self.B[k,m]*cos(theta[k] - theta[m])) for m in self.K[k]])
+				self.busData[k].qGen = np.round(self.busData[k].qGen*1e10)/1e10
 	
 
 # Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
@@ -104,6 +104,7 @@ class case:
 		r = np.zeros((self.nBus,self.nBus))
 		x = np.zeros((self.nBus,self.nBus))
 		a = np.ones((self.nBus,self.nBus))
+		gsh = np.zeros((self.nBus,self.nBus))
 		bsh = np.zeros((self.nBus,self.nBus))
 		phi = np.zeros((self.nBus,self.nBus))
 		K = [ [] for i in range(self.nBus)]
@@ -117,6 +118,9 @@ class case:
 
 			x[branch.fromBus,branch.toBus] = branch.x
 			x[branch.toBus,branch.fromBus] = branch.x
+
+			gsh[branch.fromBus,branch.toBus] = branch.gsh	
+			gsh[branch.toBus,branch.fromBus] = branch.gsh
 
 			bsh[branch.fromBus,branch.toBus] = branch.bsh	
 			bsh[branch.toBus,branch.fromBus] = branch.bsh
@@ -132,8 +136,9 @@ class case:
 
 # Method case.buildY builds the admittance matrix Y of the system
 	def buildY(self):
-		Y = -self.a*transpose(self.a)*self.y
-		for k in range(self.nBus): Y[k,k] = 1j*self.bsh[k,k] + sum([self.a[k,m]**2*self.y[k,m] + 1j*self.bsh[k,m] for m in self.K[k]])
+		for k in range(self.nBus):
+			for m in range(self.nBus.remove(k): Y[k,m] = -a[k,m]*np.exp(-1j*phi[k,m])*a[m,k]*np.exp(1j*phi[m,k])*(case.g[k,m] + 1j*case.b[k,m])
+			Y[k,k] = case.busData[k].gsh + 1j*case.busData[k].bsh + sum([a[k,m]**2*(gsh[k,m] + 1j*bsh[k,m] + g[k,m] + 1j*b[k,m])for m in K[k]])
 		return Y	
 
 # isGen(busN) returns True if the bus with number busN has a generator attached to it.
@@ -319,7 +324,7 @@ class bus:
 #--> "a" is the turns ratio of the transformer attached to the branch when there is one.
 #--> "phi" is the a
 class branch:
-	def __init__(self,number,fromBus,toBus,r,x,bsh,a,phi):
+	def __init__(self,number,fromBus,toBus,r,x,gsh,bsh,a,phi):
 		self.number = int(number)
 		self.fromBus = int(fromBus)
 		self.toBus = int(toBus)

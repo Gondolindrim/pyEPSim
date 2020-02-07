@@ -55,11 +55,11 @@ def dPdT(V,theta,K,a,phi,y,Y,bsh,isP,isT): #{{{1
 							else:
 								if k==j: H[i,p] = V[j]*V[n]*a[j,n]*a[n,j]*(  g[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]) - b[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
 								else: H[i,p] =    V[j]*V[n]*a[j,n]*a[n,j]*( -g[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
-						print(' --> dPdT[{},{}] = dP({},{})/dT({})'.format(i,k,j,n,k))
+						#print(' --> dPdT[{},{}] = dP({},{})/dT({})'.format(i,k,j,n,k))
 						p+=1
 				i+=1
 	# Deleting the reference bar
-	print(H)
+	#print(H)
 	return H
 
 def dPdV(V,theta,K,a,phi,y,Y,bsh,isP,isV):#{{{1
@@ -171,7 +171,7 @@ def h(V,theta,K,a,phi,y,Y,bsh,isP,isQ,isV): #{{{1
 				if j==n: # If measuring power injection on bar j
 					h[i] = V[j]**2*G[j,j] + V[j]*sum([ V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
 				else:	# If measuring power flux from bar j to n
-					h[i] = V[j]**2*a[j,n]**2*g[j,n] - a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n]) + b[j,n]*sin(theta[j] - theta[n]))
+					h[i] = (a[j,n]*V[j])**2*g[j,n] - a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
 					
 				i +=1
 				
@@ -179,9 +179,9 @@ def h(V,theta,K,a,phi,y,Y,bsh,isP,isQ,isV): #{{{1
 		for n in range(nbus):
 			if isQ[j,n]:
 				if j==n:
-					h[i] = -V[j]**2*bsh[j,j] + sum([ -V[j]**2*a[j,m]**2*(b[j,m] + bsh[j,m]) + a[m,j]*a[j,m]*V[j]*V[m]*( -g[j,m]*sin(theta[j] - theta[m]) + b[j,m]*cos(theta[j] - theta[m]) ) for m in K[j]])
+					h[i] = -V[j]**2*B[j,j] + V[j]*sum([ V[m]*(G[j,m]*sin(theta[j] - theta[m]) - B[j,m]*cos(theta[j] - theta[m])) for m in K[j]])
 				else:
-					h[i] =  -V[j]**2*a[j,n]**2*(b[j,n] + bsh[j,n]) + a[n,j]*a[j,n]*V[j]*V[n]*( -g[j,n]*sin(theta[j] - theta[n]) + b[j,n]*cos(theta[j] - theta[n]) )
+					h[i] = -(a[j,n]*V[j])**2**(b[j,n] + bsh[j,n]) + a[j,n]*a[n,j]*V[j]*V[n]*( -g[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]) )
 				i +=1
 	return h
 

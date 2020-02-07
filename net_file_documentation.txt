@@ -42,8 +42,8 @@ BRANCH DATA COLUMNS
 	4 - Variable phase angle for MW control (phase shifter)
 07 Branch resistance R, per unit (F) *
 08 Branch reactance X, per unit (F) * No zero impedance lines
-09 Line charging B, per unit (F) * (total line charging, +B)
-10 Line MVA rating No 1 (I) Left justify!
+09 Line shunt conductance G, per unit (G)
+10 Line shunt charging susceptance B, per unit (F) *
 11 Line MVA rating No 2 (I) Left justify!
 12 Line MVA rating No 3 (I) Left justify!
 13 Control bus number

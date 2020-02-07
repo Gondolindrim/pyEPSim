@@ -133,7 +133,7 @@ def loadCase(fileName,**kwargs):
 
 				if float(line[14]) == 0: 
 					raise dataCardError(' >> Netfile error: branch from bus \'{}\' to bus \'{}\' has a turns ratio of 0.'.format(busList[fromBus].name,busList[toBus].name))
-				else: branchList.append(cL.branch(0,fromBus,toBus,line[6],line[7],line[8],line[14],float(line[15])*np.pi/180))
+				else: branchList.append(cL.branch(0,fromBus,toBus,line[6],line[7],line[8],line[9],line[14],float(line[15])*np.pi/180))
 
 		# Just likle with the buses, i is the branch number counter. It is used to assign the branch numbers that will be used by the program; branch numbers are assigned in the order they appear in the netfile.
 		for i in range(len(branchList)): branchList[i].number = i

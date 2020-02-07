@@ -54,8 +54,8 @@ def powerFlow(case,**kwargs):
 	theta = np.zeros(case.nBus)
 
 	# P and Q are the vectors of injected bus power
-	P = np.diag(array([bus.pGen - bus.pLoad for bus in case.busData]))/case.Sb
-	Q = np.diag(array([bus.qGen - bus.qLoad for bus in case.busData]))/case.Sb
+	P = np.diag(array([bus.pGen for bus in case.busData]))/case.Sb
+	Q = np.diag(array([bus.qGen for bus in case.busData]))/case.Sb
 
 	# isP, isQ and isV are the matrixes/array that flag P, Q and V measures
 	isP = np.eye(case.nBus)
@@ -69,7 +69,6 @@ def powerFlow(case,**kwargs):
 			theta[i] = case.busData[i].finalAngle
 			isV[i] = 0
 			isT[i] = 0
-			theta = theta[i]*np.ones(case.nBus)
 			isP[i,i] = 0
 			isQ[i,i] = 0
 		if case.busData[i].PVtype == 'PV':
@@ -83,7 +82,7 @@ def powerFlow(case,**kwargs):
 	success = False
 
 	itCount = 0
-	verbose = 2
+	#verbose = 2
 	# (5.6) Start time counte6
 	tstart = time.time()
 	# -------------------------------------------------
@@ -92,6 +91,13 @@ def powerFlow(case,**kwargs):
 	if verbose > 0: print(' --> Beggining power flow method on case \'{0}\'...'.format(case.name))
 	while(True):	# STARTING ITERATIONS
 
+		for i in range(case.nBus):
+			if case.busData[i].pLoad != 0 and case.busData[i].qLoad**2 != 0:
+				case.busData[i].gsh = V[i]**2*case.busData[i].pLoad/(case.busData[i].pLoad**2 + case.busData[i].qLoad**2)
+				case.busData[i].bsh = V[i]**2*case.busData[i].qLoad/(case.busData[i].pLoad**2 + case.busData[i].qLoad**2)
+
+		case.updateMatrixes()
+
 		# Increasing iteration counter
 		itCount += 1
 		
@@ -99,8 +105,7 @@ def powerFlow(case,**kwargs):
 		if verbose > 1: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 		
 		# Calculating mF.Jacobian
-		H = mF.Jac(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV,isT)
-		print(H)
+		H = mF.Jac(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV,isT)	
 
 		Z = mF.Z(P,Q,isP,isQ)
 		h = mF.h(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV)
@@ -109,7 +114,7 @@ def powerFlow(case,**kwargs):
 		deltaSLC = Z - h
 
 		dX = inv(H) @ deltaSLC
-	
+		
 		# Updating V and theta
 		i = 0
 		for j in range(case.nBus):
