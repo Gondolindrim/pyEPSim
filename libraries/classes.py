@@ -56,16 +56,14 @@ class case:
 		self.nBus = len(self.busData)
 		self.nGen = len(self.genData)
 
-		self.r, self.x, self.a, self.phi, self.gsh, self.bsh, self.K  = self.updateMatrixes()		
-		self.z = array([[self.r[m,n] + 1j*self.x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
-		self.y = array([[1/self.z[m,n] if self.z[m,n] != 0 else 0 for m in range(self.nBus)] for n in range(self.nBus)])
-		self.g = real(copy(self.y))
-		self.b = imag(copy(self.y))
-		self.bsh = array([[ self.bsh[m,n]/2 if m!=n else self.bsh[m,n] for n in range(self.nBus)] for m in range(self.nBus)])
+		self.r, self.x, self.z, self.y, self.g, self.b, self.a, self.phi, self.gsh, self.bsh, self.K  = self.updateMatrixes()		
+		#self.z = array([[self.r[m,n] + 1j*self.x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
+		#self.y = array([[1/self.z[m,n] if self.z[m,n] != 0 else 0 for m in range(self.nBus)] for n in range(self.nBus)])
+		#self.g = real(copy(self.y))
+		#self.b = imag(copy(self.y))
+		#self.bsh = array([[ self.bsh[m,n]/2 if m!=n else self.bsh[m,n] for n in range(self.nBus)] for m in range(self.nBus)])
 
-		self.Y = self.buildY();
-		self.B = imag(copy(self.Y))
-		self.G = real(copy(self.Y))
+		self.Y, self.G, self.B = self.buildY();
 
 	def __str__(self):
 
@@ -96,6 +94,16 @@ class case:
 				self.busData[k].qGen = -V[k]**2*self.B[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*sin(theta[k] - theta[m]) - self.B[k,m]*cos(theta[k] - theta[m])) for m in self.K[k]]) + self.busData[k].qLoad/self.Sb
 				self.busData[k].qGen = self.Sb*np.round(self.busData[k].qGen*1e10)/1e10
 				self.busData[k].finalAngle = 180/pi*theta[k]
+			
+			for k in range(len(self.branchData)):
+				j = self.branchData[k].fromBus
+				n = self.branchData[k].toBus
+				self.branchData[k].activeTransfer = (self.a[j,n]*V[j])**2*self.g[j,n] - self.a[j,n]*self.a[n,j]*V[j]*V[n]*(self.g[j,n]*cos(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) + self.b[j,n]*sin(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]))
+				self.branchData[k].reactiveTransfer = -(self.a[j,n]*V[j])**2**(self.b[j,n] + self.bsh[j,n]) + self.a[j,n]*self.a[n,j]*V[j]*V[n]*( -self.g[j,n]*sin(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) + self.b[j,n]*cos(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) )
+				self.branchData[k].activeLoss = self.g[j,n]*np.abs(V[j]*np.exp(1j*theta[j]) - V[n]*np.exp(1j*theta[n]))**2
+				self.branchData[k].reactiveLoss = -self.b[j,n]*np.abs(V[j]*np.exp(1j*theta[j]) - V[n]*np.exp(1j*theta[n]))**2
+				self.branchData[k].shuntReactivePower = -self.bsh[j,n]*(V[j]**2 + V[n]**2)
+
 
 # Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
 # case.branchData[1].r = 5
@@ -129,10 +137,48 @@ class case:
 
 			if branch.a != 0: a[branch.fromBus,branch.toBus] = branch.a
 
-		for k in range(self.nBus):
-			bsh[k,k] = self.busData[k].bsh
+		for k in range(self.nBus): bsh[k,k] = self.busData[k].bsh
+		
+		z = array([[r[m,n] + 1j*x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
+		y = array([[1/z[m,n] if z[m,n] != 0 else 0 for m in range(self.nBus)] for n in range(self.nBus)])
+		g = np.real(copy(y))
+		b = np.imag(copy(y))
+		
+		return r,x,z,y,g,b,a,phi,gsh,bsh,K
 
-		return r,x,a,phi,gsh,bsh,K
+# getBusNumber receives the name of a target bus and outputs its number in the busData list. If the name is not found in the list, the function returns an error and outputs the number -1
+	def getBusNumber(self,targetBusName):
+		for bus in self.busData:
+			if bus.name == targetBusName: return bus.number
+		else:
+			raise NameError(' >> getBusNumber error: the provided target bus name was not found in the bus list.')
+			return -1
+			
+
+# Function swapBuses is used to swap bus 'bus1' and bus 'bus2' in the busList and update the system matrixes and data lists to reflect that swapping.
+	def swapBuses(self,bus1,bus2):
+		i = self.getBusNumber(bus1)
+		j = self.getBusNumber(bus2)
+		tempCase = copy(self)
+		tempCase.busData[i] = copy(self.busData[j])
+		tempCase.busData[j] = copy(self.busData[i])
+		
+		# Resetting "from bus" and "to bus" numbers
+		tempCase.busData[i].number = i
+		tempCase.busData[j].number = j
+	
+		for branch in tempCase.branchData:
+			if branch.fromBus == i: branch.fromBus = j
+			elif branch.fromBus == j: branch.fromBus = i
+
+			if branch.toBus == i: branch.toBus = j
+			elif branch.toBus == j: branch.toBus = i
+		
+		tempCase.r, tempCase.x, tempCase.z, tempCase.y, tempCase.g, tempCase.b,tempCase.a, tempCase.phi, tempCase.gsh, tempCase.bsh, tempCase.K  = tempCase.updateMatrixes()		
+
+		tempCase.Y, tempCase.G, tempCase.B = tempCase.buildY();
+		return tempCase
+
 
 # Method case.buildY builds the admittance matrix Y of the system
 	def buildY(self):
@@ -140,7 +186,7 @@ class case:
 		for k in range(self.nBus):
 			for m in self.K[k]: Y[k,m] = -self.a[k,m]*np.exp(-1j*self.phi[k,m])*self.a[m,k]*np.exp(1j*self.phi[m,k])*(self.g[k,m] + 1j*self.b[k,m])
 			Y[k,k] = self.busData[k].gsh + 1j*self.busData[k].bsh + sum([self.a[k,m]**2*(self.gsh[k,m] + 1j*self.bsh[k,m] + self.g[k,m] + 1j*self.b[k,m]) for m in self.K[k]])
-		return Y	
+		return Y, np.real(Y), np.imag(Y)	
 
 # isGen(busN) returns True if the bus with number busN has a generator attached to it.
 	def isGen(self,busN):
@@ -250,9 +296,9 @@ class case:
 
 		print('\n >> Case \'{0}\' branch list'.format(self.name))
 		tabRows = []
-		tabHeader = ['Number','From Bus\n(Tap bus)', 'To Bus\n(Z bus)', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt conductance\n gsh (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)', 'Transformer\nphase shift (phi)']
+		tabHeader = ['Number','From Bus\n(Tap bus)', 'Tap bus N', 'To Bus\n(Z bus)', 'Z bus N', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt conductance\n gsh (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)', 'Transformer\nphase shift (phi)', 'Active\nPower Transfer (MW)', 'Reactive\nPower Transfer (MVAR)', 'Active\nPower Loss (MW)', 'Reactive\nPower Loss (MVAR)', 'Reactive\nShunt Generated\nPower (MVAR)']
 		for branch in self.branchData:
-			tabRows.append([branch.number,self.busData[branch.fromBus].name, self.busData[branch.toBus].name, branch.r, branch.x, branch.gsh, branch.bsh, branch.a,branch.phi*180/np.pi])
+			tabRows.append([branch.number,self.busData[branch.fromBus].name, branch.fromBus, self.busData[branch.toBus].name, branch.toBus, branch.r, branch.x, branch.gsh, branch.bsh, branch.a,branch.phi*180/np.pi, branch.activeTransfer*self.Sb, branch.reactiveTransfer*self.Sb, branch.activeLoss*self.Sb, branch.reactiveLoss*self.Sb, branch.shuntReactivePower*self.Sb])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -325,7 +371,7 @@ class bus:
 #--> "a" is the turns ratio of the transformer attached to the branch when there is one.
 #--> "phi" is the a
 class branch:
-	def __init__(self,number,fromBus,toBus,r,x,gsh,bsh,a,phi):
+	def __init__(self,number,fromBus,toBus,r,x,gsh,bsh,a,phi,activeTransfer = 0,reactiveTransfer = 0, activeLoss = 0, reactiveLoss = 0, shuntReactivePower = 0):
 		self.number = int(number)
 		self.fromBus = int(fromBus)
 		self.toBus = int(toBus)
@@ -335,6 +381,11 @@ class branch:
 		self.bsh = float(bsh)
 		self.a = float(a)
 		self.phi = float(phi)
+		self.reactiveTransfer = float(reactiveTransfer)
+		self.activeTransfer = float(activeTransfer)
+		self.activeLoss = float(activeLoss)
+		self.reactiveLoss = float(reactiveLoss)
+		self.shuntReactivePower = float(shuntReactivePower)
 
 # (4) Generator object {{{1
 # The generator object stores the parameters of a given generator. Generators are modelled as synchronous machines:

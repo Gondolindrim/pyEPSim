@@ -44,13 +44,10 @@ BRANCH DATA COLUMNS
 08 Branch reactance X, per unit (F) * No zero impedance lines
 09 Line shunt conductance G, per unit (G)
 10 Line shunt charging susceptance B, per unit (F) *
-11 Line MVA rating No 2 (I) Left justify!
-12 Line MVA rating No 3 (I) Left justify!
-13 Control bus number
-14 Side (I)
-	0 - Controlled bus is one of the terminals
-	1 - Controlled bus is near the tap side
-	2 - Controlled bus is near the impedance side (Z bus)
+11 Active power transfer (F)
+12 Reactive power transfer (F)
+13 Active power loss (F)
+14 Reactive power loss (F)
 15 Transformer final turns ratio (F)
 16 Transformer (phase shifter) final angle in degrees (F)
 17 Minimum tap or phase shift (F)

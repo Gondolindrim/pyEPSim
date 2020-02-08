@@ -49,10 +49,15 @@ verbose = args.verbose
 netFile = args.net
 
 case = lC.loadCase(netFile)
-print(case)
-
+swappedCase = case.swapBuses('Bus 001','Bus 002')
+swappedCase.name = 'Swapped Case'
 case.runPowerFlow()
-
 print(case)
+
+swappedCase.runPowerFlow()
+print(swappedCase)
+
+#case.runPowerFlow()
+#print(case)
 
 #print(case)

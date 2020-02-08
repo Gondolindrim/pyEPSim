@@ -56,7 +56,7 @@ def powerFlow(case,**kwargs):
 	# P and Q are the vectors of injected bus power
 	P = np.diag(array([bus.pGen - bus.pLoad for bus in case.busData]))/case.Sb
 	Q = np.diag(array([bus.qGen - bus.qLoad for bus in case.busData]))/case.Sb
-	print(P)
+	#print(P)
 	# isP, isQ and isV are the matrixes/array that flag P, Q and V measures
 	isP = np.eye(case.nBus)
 	isQ = np.eye(case.nBus)
