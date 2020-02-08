@@ -56,7 +56,7 @@ class case:
 		self.nBus = len(self.busData)
 		self.nGen = len(self.genData)
 
-		self.r, self.x, self.a, self.phi, self.bsh, self.K  = self.updateMatrixes()		
+		self.r, self.x, self.a, self.phi, self.gsh, self.bsh, self.K  = self.updateMatrixes()		
 		self.z = array([[self.r[m,n] + 1j*self.x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
 		self.y = array([[1/self.z[m,n] if self.z[m,n] != 0 else 0 for m in range(self.nBus)] for n in range(self.nBus)])
 		self.g = real(copy(self.y))
@@ -91,11 +91,11 @@ class case:
 			for k in range(self.nBus): self.busData[k].finalVoltage, self.busData[k].finalAngle = V[k], theta[k]
 
 			for k in range(self.nBus):
-				self.busData[k].pGen  = V[k]**2*self.G[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*cos(theta[k] - theta[m]) + self.B[k,m]*sin(theta[k] - theta[m])) for m in self.K[k]])
-				self.busData[k].pGen = np.round(self.busData[k].pGen*1e10)/1e10
-				self.busData[k].qGen = -V[k]**2*self.B[k,k] + sum([ V[m]*(self.G[k,m]*sin(theta[k] - theta[m]) - self.B[k,m]*cos(theta[k] - theta[m])) for m in self.K[k]])
-				self.busData[k].qGen = np.round(self.busData[k].qGen*1e10)/1e10
-	
+				self.busData[k].pGen  = V[k]**2*self.G[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*cos(theta[k] - theta[m]) + self.B[k,m]*sin(theta[k] - theta[m])) for m in self.K[k]]) + self.busData[k].pLoad/self.Sb
+				self.busData[k].pGen = self.Sb*np.round(self.busData[k].pGen*1e10)/1e10
+				self.busData[k].qGen = -V[k]**2*self.B[k,k] + V[k]*sum([ V[m]*(self.G[k,m]*sin(theta[k] - theta[m]) - self.B[k,m]*cos(theta[k] - theta[m])) for m in self.K[k]]) + self.busData[k].qLoad/self.Sb
+				self.busData[k].qGen = self.Sb*np.round(self.busData[k].qGen*1e10)/1e10
+				self.busData[k].finalAngle = 180/pi*theta[k]
 
 # Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
 # case.branchData[1].r = 5
@@ -132,13 +132,14 @@ class case:
 		for k in range(self.nBus):
 			bsh[k,k] = self.busData[k].bsh
 
-		return r,x,a,phi,bsh,K
+		return r,x,a,phi,gsh,bsh,K
 
 # Method case.buildY builds the admittance matrix Y of the system
 	def buildY(self):
+		Y = np.zeros((self.nBus,self.nBus),dtype=complex)
 		for k in range(self.nBus):
-			for m in range(self.nBus.remove(k): Y[k,m] = -a[k,m]*np.exp(-1j*phi[k,m])*a[m,k]*np.exp(1j*phi[m,k])*(case.g[k,m] + 1j*case.b[k,m])
-			Y[k,k] = case.busData[k].gsh + 1j*case.busData[k].bsh + sum([a[k,m]**2*(gsh[k,m] + 1j*bsh[k,m] + g[k,m] + 1j*b[k,m])for m in K[k]])
+			for m in self.K[k]: Y[k,m] = -self.a[k,m]*np.exp(-1j*self.phi[k,m])*self.a[m,k]*np.exp(1j*self.phi[m,k])*(self.g[k,m] + 1j*self.b[k,m])
+			Y[k,k] = self.busData[k].gsh + 1j*self.busData[k].bsh + sum([self.a[k,m]**2*(self.gsh[k,m] + 1j*self.bsh[k,m] + self.g[k,m] + 1j*self.b[k,m]) for m in self.K[k]])
 		return Y	
 
 # isGen(busN) returns True if the bus with number busN has a generator attached to it.
@@ -237,9 +238,9 @@ class case:
 
 		print('\n >> Case \'{0}\' bus list'.format(self.name))
 		tabRows = []
-		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
+		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt conductance\ngsh (p.u.)', 'Shunt susceptancee\nbsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
 		for bus in self.busData:
-			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.bsh, bus.gsh, bus.finalVoltage, bus.finalAngle])
+			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.gsh, bus.bsh, bus.finalVoltage, bus.finalAngle])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -249,9 +250,9 @@ class case:
 
 		print('\n >> Case \'{0}\' branch list'.format(self.name))
 		tabRows = []
-		tabHeader = ['Number','From Bus\n(Tap bus)', 'To Bus\n(Z bus)', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)', 'Transformer\nphase shift (phi)']
+		tabHeader = ['Number','From Bus\n(Tap bus)', 'To Bus\n(Z bus)', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt conductance\n gsh (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)', 'Transformer\nphase shift (phi)']
 		for branch in self.branchData:
-			tabRows.append([branch.number,self.busData[branch.fromBus].name, self.busData[branch.toBus].name, branch.r, branch.x, branch.bsh, branch.a,branch.phi*180/np.pi])
+			tabRows.append([branch.number,self.busData[branch.fromBus].name, self.busData[branch.toBus].name, branch.r, branch.x, branch.gsh, branch.bsh, branch.a,branch.phi*180/np.pi])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -330,6 +331,7 @@ class branch:
 		self.toBus = int(toBus)
 		self.r = float(r)
 		self.x = float(x)
+		self.gsh = float(gsh)
 		self.bsh = float(bsh)
 		self.a = float(a)
 		self.phi = float(phi)

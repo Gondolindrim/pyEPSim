@@ -76,7 +76,7 @@ def loadCase(fileName,**kwargs):
 		# Searching for bus data start card
 		line = dataCardSearch('BUS DATA FOLLOWS',fileData)
 		line = fileData.readline()	# Skip --- line
-
+		line = fileData.readline()
 		# Acquiring bus data
 		busList = []
 		while True:
@@ -103,7 +103,7 @@ def loadCase(fileName,**kwargs):
 		# Searching for branch data start card
 		line = dataCardSearch('BRANCH DATA FOLLOWS',fileData)
 		line = fileData.readline()	# Skip --- line
-
+		line = fileData.readline()
 		branchList = []	
 		while True:
 			line = fileData.readline().strip().split('\t')

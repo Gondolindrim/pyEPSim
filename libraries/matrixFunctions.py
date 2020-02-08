@@ -111,7 +111,7 @@ def dQdT(V,theta,K,a,phi,y,Y,bsh,isQ,isT): #{{{1
 					if isT[k]:
 						if j==n: # If measuring power injection
 							if j==k: M[i,p] = V[j]*sum([V[m]*(G[j,m]*cos(theta[j] - theta[m] + phi[j,n] - phi[n,j]) + B[j,m]*sin(theta[j] - theta[m] + phi[j,n] - phi[n,j])) for m in K[j]])
-							elif (k in K[j] and k!=j): M[i,p] = -V[j]*V[k]*(G[j,k]*cos(theta[j] - theta[k]) + B[j,k]*sin(theta[j] - theta[k]))
+							elif (k in K[j] and k!=j): M[i,p] = V[j]*V[k]*(-G[j,k]*cos(theta[j] - theta[k]) - B[j,k]*sin(theta[j] - theta[k]))
 							else: M[i,p] = 0
 						else:
 							if k!=j and k!=n: M[i,p] = 0
@@ -168,16 +168,17 @@ def h(V,theta,K,a,phi,y,Y,bsh,isP,isQ,isV): #{{{1
 	for j in range(nbus):	
 		for n in range(nbus):
 			if isP[j,n]:
+				#print(' >>>>>>>>>> h({}) = P({},{})'.format(i,j,n))
 				if j==n: # If measuring power injection on bar j
 					h[i] = V[j]**2*G[j,j] + V[j]*sum([ V[m]*(G[j,m]*cos(theta[j] - theta[m]) + B[j,m]*sin(theta[j] - theta[m])) for m in K[j]])
 				else:	# If measuring power flux from bar j to n
 					h[i] = (a[j,n]*V[j])**2*g[j,n] - a[j,n]*a[n,j]*V[j]*V[n]*(g[j,n]*cos(theta[j] - theta[n] + phi[j,n] - phi[n,j]) + b[j,n]*sin(theta[j] - theta[n] + phi[j,n] - phi[n,j]))
 					
 				i +=1
-				
 	for j in range(nbus):	
 		for n in range(nbus):
 			if isQ[j,n]:
+				#print(' >>>>>>>>>> h({}) = Q({},{})'.format(i,j,n))
 				if j==n:
 					h[i] = -V[j]**2*B[j,j] + V[j]*sum([ V[m]*(G[j,m]*sin(theta[j] - theta[m]) - B[j,m]*cos(theta[j] - theta[m])) for m in K[j]])
 				else:
@@ -195,11 +196,14 @@ def Z(P,Q,isP,isQ): #{{{1
 		for n in range(nbus):
 			if isP[j,n]:
 				Z[i] = P[j,n]
+				#print(' >>>>>>>>>> Z({}) = P({},{}) = {}'.format(i,j,n,Z[i]))
 				i+=1
+
 	for j in range(nbus):	
 		for n in range(nbus):
 			if isQ[j,n]:
 				Z[i] = Q[j,n]
+				#print(' >>>>>>>>>> Z({}) = Q({},{}) = {}'.format(i,j,n,Z[i]))
 				i += 1
 	return Z
 

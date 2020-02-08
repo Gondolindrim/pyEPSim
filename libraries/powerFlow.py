@@ -36,11 +36,11 @@ def powerFlow(case,**kwargs):
 
 	# deltaMax is the maximum dX at which the iterations are considered divergent. If dX > deltaMax the method aborts and returns success = False.
 	if ('deltaMax' in kwargs): deltaMax = kwargs['deltaMax']
-	else: deltaMax = 10
+	else: deltaMax = 100
 
 	# maxIter is the maximum number of iterations until the method is considered divergent.
 	if ('maxIter' in kwargs): maxIter = kwargs['maxIter']
-	else: maxIter = 10
+	else: maxIter = 100
 
 	# Information print level.
 	# If verbose is 0, no output is given. This is the default level.
@@ -54,9 +54,9 @@ def powerFlow(case,**kwargs):
 	theta = np.zeros(case.nBus)
 
 	# P and Q are the vectors of injected bus power
-	P = np.diag(array([bus.pGen for bus in case.busData]))/case.Sb
-	Q = np.diag(array([bus.qGen for bus in case.busData]))/case.Sb
-
+	P = np.diag(array([bus.pGen - bus.pLoad for bus in case.busData]))/case.Sb
+	Q = np.diag(array([bus.qGen - bus.qLoad for bus in case.busData]))/case.Sb
+	print(P)
 	# isP, isQ and isV are the matrixes/array that flag P, Q and V measures
 	isP = np.eye(case.nBus)
 	isQ = np.eye(case.nBus)
@@ -74,15 +74,16 @@ def powerFlow(case,**kwargs):
 		if case.busData[i].PVtype == 'PV':
 			V[i] = case.busData[i].finalVoltage
 			isV[i] = 0
-			isP[i,i] = 0
-		if case.busData[i].PVtype == 'PQ':
-			isP[i,i] = 0
+			isP[i,i] = 1
 			isQ[i,i] = 0
+		if case.busData[i].PVtype == 'PQ':
+			isP[i,i] = 1
+			isQ[i,i] = 1
 
 	success = False
 
 	itCount = 0
-	#verbose = 2
+	verbose = 0
 	# (5.6) Start time counte6
 	tstart = time.time()
 	# -------------------------------------------------
@@ -91,12 +92,11 @@ def powerFlow(case,**kwargs):
 	if verbose > 0: print(' --> Beggining power flow method on case \'{0}\'...'.format(case.name))
 	while(True):	# STARTING ITERATIONS
 
-		for i in range(case.nBus):
-			if case.busData[i].pLoad != 0 and case.busData[i].qLoad**2 != 0:
-				case.busData[i].gsh = V[i]**2*case.busData[i].pLoad/(case.busData[i].pLoad**2 + case.busData[i].qLoad**2)
-				case.busData[i].bsh = V[i]**2*case.busData[i].qLoad/(case.busData[i].pLoad**2 + case.busData[i].qLoad**2)
-
-		case.updateMatrixes()
+#		for i in range(case.nBus):
+#			if case.busData[i].pLoad != 0 and case.busData[i].qLoad**2 != 0:
+#				case.busData[i].gsh = -V[i]**2*case.busData[i].pLoad/(case.busData[i].pLoad**2 + case.busData[i].qLoad**2)
+#				case.busData[i].bsh = -V[i]**2*case.busData[i].qLoad/(case.busData[i].pLoad**2 + case.busData[i].qLoad**2)
+#		case.updateMatrixes()
 
 		# Increasing iteration counter
 		itCount += 1
@@ -106,7 +106,7 @@ def powerFlow(case,**kwargs):
 		
 		# Calculating mF.Jacobian
 		H = mF.Jac(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV,isT)	
-
+		if verbose > 2: print(' >>>>> H = {}'.format(H))
 		Z = mF.Z(P,Q,isP,isQ)
 		h = mF.h(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV)
 
