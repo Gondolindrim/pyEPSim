@@ -76,6 +76,20 @@ GENERATOR DATA COLUMNS:
 15 Quadrature axis subtransient reactance x''_q (pu)
 16 Quadrature axis rotor transient magnetization time constant T'_qo
 17 Quadrature axis rotor subtransient magnetization time constant T''_qo
+18 Mechanical power at time t = 0 
+19 Field winding voltage at time t = 0
+20 Internal induced voltage quadrature component at t = 0
+21 Internal induced voltage direct component at t = 0
+22 Rotor angle delta at time t = 0
+23 Electrical speed at time t = 0
+24 AVR output voltage at time t = 0
+25 PSS output voltage at time t = 0
+26 AVR controller gain Ke
+27 AVR controller time constant Te
+27 PSS controller Gain KPss
+28 PSS controller washout time constant Tw
+29 PSS controller first time constant T1
+30 PSS controller second time constant T2
 -------------------------------------------------
 FAULT DATA COLUMNS
 

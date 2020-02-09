@@ -10,21 +10,26 @@
 # -------------------------------------------------
 
 # Synchronous machine second-order model with damping
-def sm2d(x,t,C,D,Yred,V,pm,genData):
-	nGen = genData.shape[0]
-	F = np.zeros(2*nGen)
-	for k in range(nGen):
-		F[2*k] = x[2*k+1]	# delta} = x[k]
-		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)]) - genData[k,3]*x[2*k+1] )/(2*genData[k,2])	# omega = x[k+1]
-
+def SM2(k,x,I,genData):
+	#F = np.zeros(2)
+	omega = x[k]
+	delta = x[k+1]
+	H = genData[k,2]
+	D = genData[k,3]
+	pm0 = genData[k,17]
+	Elq0 = genData[k,19]
+	Iq = np.real(I)
+	F[k] = ( pm0 - Elq0*Iq - D*omega )/(2*H)	# omega = x[k+1]
+	F[k+1] = omega
 	return F
 
-# Synchronous machine second-order model without damping
-def sm2(x,t,C,D,Yred,V,pm,genData):
-	nGen = genData.shape[0]
-	F = np.zeros(2*nGen)
-	for k in range(nGen):
-		F[2*k] = x[2*k+1]	# delta} = x[k]
-		F[2*k+1] = ( pm[k] - (V[k]**2)*real(Yred[k,k]) - sum( [C[k,j]*sin(x[2*k] - x[2*j]) + D[k,j]*cos(x[2*k] - x[2*j]) for j in range(nGen)]) )/(2*genData[k,2])	# omega = x[k+1]
-
-	return F
+# Synchronous machine one-axis (third-order) model
+def SM1A:
+	EPq = x[k]
+	omega = x[k+1]
+	delta = x[k+2]
+	EFD0 = genData[k,18]
+	tPdo = genData[k,10]
+	F[k] = 1/tPdo*(EFD0 - EPq + (xd - xPd)*Id)
+	F[k+1] = ( pm0 - Elq*Iq - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
+	F[k+2] = x[k+1]
