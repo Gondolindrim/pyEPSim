@@ -56,7 +56,7 @@ class case:
 		self.nBus = len(self.busData)
 		self.nGen = len(self.genData)
 
-		self.r, self.x, self.z, self.y, self.g, self.b, self.a, self.phi, self.gsh, self.bsh, self.K  = self.updateMatrixes()		
+		self.r, self.x, self.z, self.y, self.g, self.b, self.a, self.phi, self.gsh, self.bsh, self.K  = self.buildy()		
 		#self.z = array([[self.r[m,n] + 1j*self.x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
 		#self.y = array([[1/self.z[m,n] if self.z[m,n] != 0 else 0 for m in range(self.nBus)] for n in range(self.nBus)])
 		#self.g = real(copy(self.y))
@@ -83,7 +83,8 @@ class case:
 		V, theta, r, elapsed, itCount, success = pF.powerFlow(self)
 		if not success:
 			print(' >>> Power flow update for case class instance returned not successful because the power flow method did not converge.')
-			V, theta = array(['None']*self.nBus), array(['None']*self.nBus),
+			V, theta = array(['None']*self.nBus), array(['None']*self.nBus)
+			return False
 
 		else:
 			for k in range(self.nBus): self.busData[k].finalVoltage, self.busData[k].finalAngle = V[k], theta[k]
@@ -104,11 +105,13 @@ class case:
 				self.branchData[k].reactiveLoss = -self.b[j,n]*np.abs(V[j]*np.exp(1j*theta[j]) - V[n]*np.exp(1j*theta[n]))**2
 				self.branchData[k].shuntReactivePower = -self.bsh[j,n]*(V[j]**2 + V[n]**2)
 
+			return True
+
 
 # Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
 # case.branchData[1].r = 5
 # In this case the user has directly updated the value of a branch resistance; all matrixes must be re-calculated. Function updateMatrixes is called whenever case.r, case.x, case.a, case.bsh, case.K are called, so they are recalculated for the present values of bus and branch data.
-	def updateMatrixes(self):
+	def buildy(self):
 		r = np.zeros((self.nBus,self.nBus))
 		x = np.zeros((self.nBus,self.nBus))
 		a = np.ones((self.nBus,self.nBus))
@@ -146,6 +149,18 @@ class case:
 		
 		return r,x,z,y,g,b,a,phi,gsh,bsh,K
 
+# Method case.buildY builds the admittance matrix Y of the system
+	def buildY(self):
+		Y = np.zeros((self.nBus,self.nBus),dtype=complex)
+		for k in range(self.nBus):
+			for m in self.K[k]: Y[k,m] = -self.a[k,m]*np.exp(-1j*self.phi[k,m])*self.a[m,k]*np.exp(1j*self.phi[m,k])*(self.g[k,m] + 1j*self.b[k,m])
+			Y[k,k] = self.busData[k].gsh + 1j*self.busData[k].bsh + sum([self.a[k,m]**2*(self.gsh[k,m] + 1j*self.bsh[k,m] + self.g[k,m] + 1j*self.b[k,m]) for m in self.K[k]])
+		return Y, np.real(Y), np.imag(Y)
+	
+	def updateMatrixes(self):
+			self.r, self.x, self.z, self.y, self.g, self.b, self.a, self.phi, self.gsh, self.bsh, self.K = self.buildy()
+			self.Y, self.G, self.B = self.buildY()
+
 # getBusNumber receives the name of a target bus and outputs its number in the busData list. If the name is not found in the list, the function returns an error and outputs the number -1
 	def getBusNumber(self,targetBusName):
 		for bus in self.busData:
@@ -166,7 +181,8 @@ class case:
 		# Resetting "from bus" and "to bus" numbers
 		tempCase.busData[i].number = i
 		tempCase.busData[j].number = j
-	
+
+		# After the bus data is swapper, the branch list must reflect that. For instance, if bus 3 and 5 were swapped (5 now is 3 and 3 now is 5), then the branch data still does not contemplate this change: the bus numbers are still attached to the old list. This also happens with the generator data, where the old bus numbers are stil valid. The following loops are meant to change bus numbers in branches and generators.	
 		for branch in tempCase.branchData:
 			if branch.fromBus == i: branch.fromBus = j
 			elif branch.fromBus == j: branch.fromBus = i
@@ -174,19 +190,13 @@ class case:
 			if branch.toBus == i: branch.toBus = j
 			elif branch.toBus == j: branch.toBus = i
 		
-		tempCase.r, tempCase.x, tempCase.z, tempCase.y, tempCase.g, tempCase.b,tempCase.a, tempCase.phi, tempCase.gsh, tempCase.bsh, tempCase.K  = tempCase.updateMatrixes()		
+		tempCase.updateMatrixes()
 
-		tempCase.Y, tempCase.G, tempCase.B = tempCase.buildY();
-		return tempCase
+		for gen in tempCase.genData:
+			if gen.busNumber == i: gen.busNumber = j
+			elif gen.busNumber == j: gen.busNumber = i
 
-
-# Method case.buildY builds the admittance matrix Y of the system
-	def buildY(self):
-		Y = np.zeros((self.nBus,self.nBus),dtype=complex)
-		for k in range(self.nBus):
-			for m in self.K[k]: Y[k,m] = -self.a[k,m]*np.exp(-1j*self.phi[k,m])*self.a[m,k]*np.exp(1j*self.phi[m,k])*(self.g[k,m] + 1j*self.b[k,m])
-			Y[k,k] = self.busData[k].gsh + 1j*self.busData[k].bsh + sum([self.a[k,m]**2*(self.gsh[k,m] + 1j*self.bsh[k,m] + self.g[k,m] + 1j*self.b[k,m]) for m in self.K[k]])
-		return Y, np.real(Y), np.imag(Y)	
+		return tempCase	
 
 # isGen(busN) returns True if the bus with number busN has a generator attached to it.
 	def isGen(self,busN):
@@ -203,57 +213,40 @@ class case:
 		rCase.name = 'Reduced ' + rCase.name	# Adding the 'Reduced' word to the case ID so that it is distinguishable from the original case
 		nBus = rCase.nBus
 		nGen = rCase.nGen
+	
+		success = rCase.runPowerFlow()
+		if not success:
+			raise 	Exception('>> Case {} reduction not possible because the power flow method did not converge.'.format(case.name))
 
-		YLoad = [(bus.pLoad - 1j*bus.qLoad)/bus.finalVoltage**2 for bus in rCase.busData]	# YLoad is the equivalent conductance load matrix. Each load is modelled as a constant impedance
-		rCase.runPowerFlow()
 		V = array([bus.finalVoltage for bus in rCase.busData])
 		theta = array([bus.finalAngle for bus in rCase.busData])
-		# Obtaining the bus number permutation matrix through an equivalence matrix. Equiv is an nBus x 1array where nBus is the generator number. Its elements are the 'new' bus numbers; for instance, equiv[1] = 5 means that bus 1 was swapped with bus 5.
-		equiv = array([ i for i in range(nBus)])
 
-		for i in range(nBus):
-			for k in range(i):
-				if not rCase.isGen(equiv[k]) and rCase.isGen(equiv[i]):
-					temp = equiv[k]
-					equiv[k] = equiv[i]
-					equiv[i] = temp
-					break
+		# YLoad is the equivalent conductance load matrix. In a reduced case model, bus loads are modelled as constant impedances. So the equivalent 
+		YLoad = [(bus.pLoad/rCase.Sb - 1j*bus.qLoad/rCase.Sb)/bus.finalVoltage**2 for bus in rCase.busData]		
+	
+		for i in range(rCase.nBus):
+			rCase.busData[i].pLoad, rCase.busData[i].qLoad = 0, 0
+			rCase.busData[i].gsh += np.real(YLoad[i])
+			rCase.busData[i].bsh += np.imag(YLoad[i])
+
+		rCase.updateMatrixes()
+
+		for i in range(rCase.nBus):
+			if not rCase.isGen(i):
+				for j in range(i+1, rCase.nBus):
+					if rCase.isGen(j):
+						rCase = rCase.swapBuses(rCase.busData[i].name, rCase.busData[j].name)
 		
-		P = np.zeros((nBus,nBus))
-		print(array([ i for i in range(nBus)]))
-		print(equiv)
-		for i in range(nBus):
-			P[i,equiv[i]] = 1
-
-		# Swapping buses according to equiv
-		temp = copy(rCase)
-		for i in range(rCase.nBus):
-			rCase.busData[i]  = temp.busData[equiv[i]]
-
-		# Bubble sorting the buses according to their new numbers
-		for i in range(rCase.nBus):
-			for j in range(rCase.nBus):
-				if rCase.busData[i].number < rCase.busData[j].number: rCase.busData[i].number, rCase.busData[j].number = rCase.busData[j].number, rCase.busData[i].number
-
-		self.printBusData()
-		rCase.printBusData()
-
-		# By the end of this routine, rCase should have ordered buses according to their number; the first buses are the ones that are attached to generators.
-
-		YDyn = P@Y@P
-		YLoadDyn = P@YLoad
-		VDyn,thetaDyn = P@V, P@theta
-		print(P)
 		# Building component matrixes
 
 		Y1 = rCase.Y[0 : nGen, 0 : nGen]
-		Y2 = rCase.Y[0 : nGen , nGen : nBus+1]
+		Y2 = rCase.Y[0 : nGen , nGen : nBus + 1]
 		Y3 = rCase.Y[nGen : nBus , 0 : nGen]
-		Y4 = rCase.Y[nGen : nBus+1 , nGen : nBus+1]
+		Y4 = rCase.Y[nGen : nBus + 1 , nGen : nBus + 1]
 
-		Ylg = np.diag(Yload[0:nGen])
+		Ylg = np.diag(YLoad[0:nGen])
 
-		Yll = np.diag(Yload[nGen:nBus])
+		Yll = np.diag(YLoad[nGen:nBus])
 
 		Ytrans = np.array([1/(gen.ra + 1j*gen.xPq) for gen in rCase.genData]) # Y' no livro
 		Ytrans = np.diag(Ytrans)
@@ -276,7 +269,7 @@ class case:
 		C = np.array([ [ V[i]*V[j]*imag(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
 		D = np.array([ [ V[i]*V[j]*real(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
 
-		return [Yred,C,D,reducedCase]
+		return [Yred,C,D,rCase]
 
 	def printBusData(self,**kwargs):
 		if 'tablefmt' in kwargs: tableformat = kwargs['tablefmt']
@@ -285,8 +278,7 @@ class case:
 		print('\n >> Case \'{0}\' bus list'.format(self.name))
 		tabRows = []
 		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt conductance\ngsh (p.u.)', 'Shunt susceptancee\nbsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
-		for bus in self.busData:
-			tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.gsh, bus.bsh, bus.finalVoltage, bus.finalAngle])
+		for bus in self.busData: tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.gsh, bus.bsh, bus.finalVoltage, bus.finalAngle])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -297,8 +289,7 @@ class case:
 		print('\n >> Case \'{0}\' branch list'.format(self.name))
 		tabRows = []
 		tabHeader = ['Number','From Bus\n(Tap bus)', 'Tap bus N', 'To Bus\n(Z bus)', 'Z bus N', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt conductance\n gsh (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)', 'Transformer\nphase shift (phi)', 'Active\nPower Transfer (MW)', 'Reactive\nPower Transfer (MVAR)', 'Active\nPower Loss (MW)', 'Reactive\nPower Loss (MVAR)', 'Reactive\nShunt Generated\nPower (MVAR)']
-		for branch in self.branchData:
-			tabRows.append([branch.number,self.busData[branch.fromBus].name, branch.fromBus, self.busData[branch.toBus].name, branch.toBus, branch.r, branch.x, branch.gsh, branch.bsh, branch.a,branch.phi*180/np.pi, branch.activeTransfer*self.Sb, branch.reactiveTransfer*self.Sb, branch.activeLoss*self.Sb, branch.reactiveLoss*self.Sb, branch.shuntReactivePower*self.Sb])
+		for branch in self.branchData: tabRows.append([branch.number,self.busData[branch.fromBus].name, branch.fromBus, self.busData[branch.toBus].name, branch.toBus, branch.r, branch.x, branch.gsh, branch.bsh, branch.a,branch.phi*180/np.pi, branch.activeTransfer*self.Sb, branch.reactiveTransfer*self.Sb, branch.activeLoss*self.Sb, branch.reactiveLoss*self.Sb, branch.shuntReactivePower*self.Sb])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
