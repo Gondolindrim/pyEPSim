@@ -10,18 +10,27 @@
 # -------------------------------------------------
 
 # Synchronous machine second-order model with damping
-def SM2(x,I,genData):
+def SM2(x,V,genData):
 	#F = np.zeros(2)
 	omega = x[0]
 	delta = x[1]
 
+	xPd = genData[8]
+	xPq = genData[12]
 	H = genData[3]
 	D = genData[4]
+	r = genData[5]
 	pm = genData[17]	# Mechanical power is constant equal to its initial value
-	Elq0 = genData[19]
-	Iq = np.real(I)
+	Elq = genData[19]	# Same as mechanical power
+	Eld = 0
 
-	omegaP = ( pm - Elq0*Iq - D*omega )/(2*H)	# omega = x[k+1]
+	Vd = np.imag(V)
+	Vq = np.real(V)
+	
+	Iq = -(r*(Vq - Elq) + xPd*(Vd -  Eld))/(r*(xPq - xPd))
+	Id = (-r*(Vd - Eld) + xPd*(Vq -  Elq))/(r*(xPq - xPd))
+
+	omegaP = ( pm - Elq*Iq - D*omega )/(2*H)	# omega = x[k+1]
 	deltaP = omega
 	return [omegaP, deltaP]
 
@@ -38,8 +47,6 @@ def SM1A(x,I,genData):
 	xPd = genData[8]
 	xPq = genData[12]
 	xd = genData[7]
-	H = genData[2]
-	D = genData[3]
 	pm = genData[17]	# Mechanical power is constant equal to its initial value
 	Iq = np.real(I)
 	Id = np.imag(I)
