@@ -76,24 +76,28 @@ GENERATOR DATA COLUMNS:
 15 Quadrature axis subtransient reactance x''_q (pu)
 16 Quadrature axis rotor transient magnetization time constant T'_qo
 17 Quadrature axis rotor subtransient magnetization time constant T''_qo
-18 Mechanical power at time t = 0 
-19 Field winding voltage at time t = 0
-20 Internal induced voltage quadrature component at t = 0
-21 Internal induced voltage direct component at t = 0
-22 Rotor angle delta at time t = 0
-23 Electrical speed at time t = 0
-24 AVR output voltage at time t = 0
-25 PSS output voltage at time t = 0
-26 AVR controller gain Ke
-27 AVR controller time constant Te
-27 PSS controller Gain KPss
-28 PSS controller washout time constant Tw
-29 PSS controller first time constant T1
-30 PSS controller second time constant T2
-31 Governor time constant tG
-32 Turbine time constant tT
-35 AVR reference voltage 
-
+18 AVR controller gain Ke
+19 AVR controller time constant Te
+20 AVR reference voltage vRef
+21 PSS controller Gain KPss
+22 PSS controller washout time constant Tw
+23 PSS controller first time constant T1
+24 PSS controller second time constant T2
+25 Governor time constant tG
+26 Turbine time constant tT
+27 Model depth:
+	(1) - SM2: second-order ("classic") model with damping
+	(2) - SM1A: third-order ("One-Axis") model
+	(3) - SM1A_TUR_GOV: third-order ("One-Axis") model with turbine and governor
+	(4) - SM1A_TUR_GOV_AVR_PSS: third-order ("One-Axis") model with turbine, governor, AVR and PSS
+	(5) - SM2A_TUR_GOV_AVR_OSS: fourth-order ("Two-axis") model with turbine, governor, AVR and PSS
+28 Mechanical power at time t = 0 
+29 Field winding voltage at time t = 0
+30 Internal induced voltage at t = 0 (complex)
+31 Rotor angle delta at time t = 0
+32 Electrical speed at time t = 0
+33 AVR output voltage at time t = 0
+34 PSS output voltage at time t = 0
 
 -------------------------------------------------
 FAULT DATA COLUMNS

@@ -34,7 +34,7 @@ import libraries.classes as cL		# classes.py contains the bus, branch, generator
 import libraries.arguments as pA	# arguments.py contains the available arguments passed to the program
 import libraries.loadCase as lC		# loadCase.py contains the case-loading routine which reads the net file
 import libraries.powerFlow as pF	# powerFlow.py contains the Newton-Raphson method used for power flow calculation.
-
+from libraries.dynamicModels import dynamicSimulation as dS
 # Importing tabulate dependency for pretty tabular prints
 from libraries.tabulate.tabulate import tabulate
 
@@ -49,13 +49,9 @@ verbose = args.verbose
 netFile = args.net
 
 case = lC.loadCase(netFile)
-case.runPowerFlow()
+#Yred, C, D, reducedCase = case.reduceMatrixes()
+#print(reducedCase)
 
-Yred, C, D, rCase = case.reduceMatrixes()
-print(Yred)
-case.printBusData()
-rCase.printBusData()
-#case.runPowerFlow()
-#print(case)
-
+disturbanceData = ['Bus 003', -(10 + 1j*5), 1]
+dS(case, disturbanceData, 100)
 #print(case)

@@ -86,15 +86,7 @@ def loadCase(fileName,**kwargs):
 				raise dataCardError(' >> Netfile error: the endcard \'-999\' was not found when acquiring bus data')
 				break
 			else:
-				busList.append(cL.bus( 0, line[0], line[3], line[6], line[7], line[8], line[9], line[10], line[15],line[4],line[5]))
-		
-		# Reorganizing buses so the first bus is the slack
-	#	for i in range(len(busList)):
-	#		if busList[i].PVtype == 'VT':
-	#			busList[i], busList[0] = busList[0], busList[i]
-	#			break
-	#	else:
-	#		raise dataCardError (' >> Netfile error: no VT bus was found! Please assign a reference bus.')
+				busList.append(cL.bus( 0, line[0], line[3], line[6], line[7], line[8], line[9], line[10], line[15],line[4],line[5]))	
 
 		# i is the bus number counter. It is used to assign the bus numbers that will be used by the program; bus numbers are assigned in the order they appear in the netfile.
 		for i in range(len(busList)): busList[i].number = i
@@ -166,7 +158,7 @@ def loadCase(fileName,**kwargs):
 
 
 				# Creating the new generator instance to be added
-				newGen = cL.generator(genBus,line[1],line[2],line[3],line[4],line[5],line[6],line[7],line[8],line[9],line[10],line[11],line[12],line[13],line[14],line[15],line[16])
+				newGen = cL.generator(genBus, line[1], line[2], line[3], line[4], line[5], line[6], line[7], line[8], line[9], line[10], line[11], line[12], line[13], line[14], line[15], line[16], line[17], line[18], line[19], line[20], line[21], line[22], line[23], line[24], line[25], line[26])
 
 				# If the parameters of the generator were given in relation with the generator PU system, they should be converted to the system's PU
 				if genDataPUReference == 'GENERATOR' or genDataPUReference == 'generator':
@@ -179,10 +171,9 @@ def loadCase(fileName,**kwargs):
 					newGen.xq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
 					newGen.xPq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
 					newGen.xPPq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
-
+					
 				genList.append(newGen)
 	
-
 		# Sorting generators by their bus number
 		for i in range(len(genList)):
 			for j in range(len(genList)):
