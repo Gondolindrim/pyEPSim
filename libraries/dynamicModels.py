@@ -151,8 +151,10 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	Te = genData.Te
 	
 	Vq = Elq - r*Iq + xPd*Id
-	Vd = -r*Id - xPd*Iq
+	Vd = -r*Id - xPq*Iq
 	Vt = np.sqrt(Vq**2 + Vd**2)
+
+	print(' >>> Gen {} model Vt = {}'.format(genData.busNumber,Vt))
 	
 	Tw = genData.Tw
 	T1 = genData.T1
@@ -166,6 +168,9 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
 	dvAVR = (Ke*(Vt - Vt0) - vAVR)/Te
+
+	#print(' >>> Gen {} model Vt - Vtref = {}\n'.format(genData.busNumber,Vt - Vt0))
+
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
@@ -238,14 +243,13 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 
 	reducedCase.runPowerFlow()
 
-	V = [bus.finalVoltage for bus in case.busData[:case.nGen]]
-	I = Yred @ V
-
-	nGen = len(Yred)
+	V0 = [bus.finalVoltage*np.e**(1j*bus.finalAngle*np.pi/180) for bus in case.busData[:case.nGen]]
+	I0 = Yred @ V0
 
 	x0 = []
 	# Calculating initial generator conditions
 	k = 0
+	nGen = len(reducedCase.genData)
 	for gen in reducedCase.genData:
 		r = gen.ra
 		xPd = gen.xPd
@@ -253,19 +257,19 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		xd = gen.xd
 		xq = gen.xq
 
-		V0 = case.busData[gen.busNumber].finalVoltage
-		I0 = sum([Yred[gen.busNumber, m]*V[m] for m in range(nGen)])
+		k = gen.busNumber
 		
-		Vq, Vd = np.real(V0), np.imag(V0)
-		Iq, Id = np.real(I0), np.imag(I0)
+		Vq, Vd = np.real(V0[k]), np.imag(V0[k])
+		Iq, Id = np.real(I0[k]), np.imag(I0[k])
+		print(' >>> I = {}'.format(I0[k]))
 
-		gen.vRef = np.sqrt(Vd**2 + Vq**2)
+		gen.vRef = np.abs(V0[k])
 
 		Eqd = (Vq + 1j*Vd) + (r + 1j*xq)*(Iq + 1j*Id)
 		ELq = Vq + r*Iq - xPd*Id
 
 		if gen.modelDepth in [1,2,3,4]: ELd = 0
-		else: ELd  = Vd + r*Id - xPq*Iq
+		else: ELd  = Vd + r*Id + xPq*Iq
 
 		gen.el0 = ELq + 1j*ELd
 
@@ -279,6 +283,12 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 
 		EFD0 = ELq + (xd - xPd)*Id
 		gen.efd0 = EFD0
+
+		dvAVR = (gen.Ke*(np.abs(V0) - gen.vRef) - gen.vAVR0)/gen.Te
+
+		#print(' >>> dvAVR = {}'.format(dvAVR))
+		#print(' >>> VRef = {}, V0 = {}'.format(gen.vRef, np.abs(V0)))
+		#print(' >>> EL0 = {}'.format(ELq + 1j*ELd))
 		
 		if gen.modelDepth == 1:
 			x0.extend([gen.omega0,gen.delta0])
@@ -290,36 +300,50 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			x0.extend([ELq, gen.omega0, gen.delta0, pm0, 0])
 		if gen.modelDepth == 4:
 			x0.extend([ELq, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0])
+			#print(SM1A_TUR_GOV_AVR_PSS([ELq, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0],Iq + 1j*Id, gen))
 
-	print(x0)
+	#print(x0)
 	def dynamicFunction(x,t):
 		
 		F = []
 		targetCase = reducedCase
 		Yt = Yred
-		if t > disturbanceTime:
+		if t < disturbanceTime:
 			targetCase = disturbedReducedCase
 			Yt = dYred
 
 		EL = np.ones(len(Yt), dtype = complex)
+		i = 0
 		for gen in reducedCase.genData:
 			k = gen.busNumber
 			if gen.modelDepth == 1:
-		#		Iq, Id, Vq, Vd = fsolve(solveI, [1, 0, 1, 0], args = (np.real(gen.el0), np.imag(gen.el0), gen.ra, gen.xPq, gen.xPd, Yt, k, V))
-				EL[k] = np.real(gen.el0) + 1j*0
+				EL[k] = np.real(elq0) + 1j*0
+				i += 2
+			if gen.modelDepth == 2:
+				EL[k] = x[i] + 1j*0
+				i += 3
+			if gen.modelDepth == 3:
+				EL[k] = x[i] + 1j*0
+				i += 5
+			if gen.modelDepth == 4:
+				EL[k] = x[i] + 1j*0
+				i += 8
 
-		def solveCurrents(x):
+		#print(' >> Dynamic function EL = {}'.format(EL))
+		def solveCurrents(y):
 			i = 0
 			F = []
 			for k in range(nGen):
+				print(' >>> Simulation V = {}'.format(V))
 				gen = reducedCase.genData[k]
+
 				ELq = np.real(EL[k])
 				ELd = np.imag(EL[k])
-
-				Iq = x[i]
-				Id = x[i+1]
+				Iq = y[i]
+				Id = y[i+1]
 				Vq = ELq - gen.ra*Iq + gen.xPd*Id
 				Vd = ELd - gen.ra*Id - gen.xPq*Iq
+				V[k] = Vq + 1j*Vd
 
 				F1 = Iq - np.real(sum([Yt[k,m]*V[m] for m in range(nGen)]))
 				F2 = Id - np.imag(sum([Yt[k,m]*V[m] for m in range(nGen)]))
@@ -332,46 +356,35 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		F0 = [1, 0]*nGen
 		sol = fsolve(solveCurrents,F0)
 		I = np.ones(nGen, dtype = complex)
-		for k in range(nGen):
-			I[k] = sol[2*k] + 1j*sol[2*k+1]
+		for k in range(nGen): I[k] = sol[2*k] + 1j*sol[2*k+1]
+		print(' >>> Dynamic function I = {}'.format(I))
 
 		F = []		
 		i = 0
 		for gen in reducedCase.genData:
 			k = gen.busNumber
+			Iq, Id = np.real(I[k]), np.imag(I[k])
 			if gen.modelDepth == 1:
-	#			Iq, Id, Vq, Vd = fsolve(solveI, [1, 0, 1, 0], args = (np.real(gen.el0), np.imag(gen.el0), gen.ra, gen.xPq, gen.xPd, Yt, k, V))
-				Iq, Id = np.real(I[k]), np.imag(I[k])
 				F.extend(SMC([x[i],x[i+1]], Iq + 1j*Id, gen))
 				i += 2
 			if gen.modelDepth == 2:
-				Iq, Id = np.real(I[k]), np.imag(I[k])
 				F.extend(SM1A([x[i], x[i+1], x[i+2]], Iq + 1j*Id, gen))
 				i += 3
 			if gen.modelDepth == 3:
-				Iq, Id = np.real(I[k]), np.imag(I[k])
 				F.extend(SM1A_TUR_GOV([x[i], x[i+1], x[i+2], x[i+3], x[i+4]], Iq + 1j*Id, gen))
 				i += 5
 			if gen.modelDepth == 4:
-				Iq, Id = np.real(I[k]), np.imag(I[k])
 				F.extend(SM1A_TUR_GOV_AVR_PSS([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7]], Iq + 1j*Id, gen))
 				i += 8
-
-
-				#F.extend(SM1A([x
-				#x0.extend([[ELq], [gen.omega0], [gen.delta0]])
-		#	if gen.modelDepth == 3:
-		#		x0.append([[ELq], [gen.omega0], [gen.delta0], [pm], [0]])
-		#	if gen.modelDepth == 4:
-		#		x0.append([[ELq], [gen.omega0], [gen.delta0], [pm], [0], [gen.vAVR0], [gen.vWash0], [gen.vPSS0]])
-		print(F)
+		#print(F)
 		return F
 
 	tspan = np.linspace(0,tFinal,10001)
 
-	print('HAHA')
 	y = odeint(dynamicFunction,x0,tspan)
 	fig1, (ax1, ax2) = pyplot.subplots(1,2)
+	fig2, (ax3, ax4) = pyplot.subplots(1,2)
+	fig3, (ax5, ax6) = pyplot.subplots(1,2)
 
 	i = 0
 	for gen in reducedCase.genData:
@@ -390,14 +403,37 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		if gen.modelDepth == 4:
 			ax1.plot(tspan,y[:,i+1], label = reducedCase.busData[gen.busNumber].name)
 			ax2.plot(tspan,y[:,i+2], label = reducedCase.busData[gen.busNumber].name)
+			EFD = [gen.efd0 + y[k,i+5] + y[k,i+6] for k in range(len(tspan))] 
+			ax3.plot(tspan,y[:,i], label = reducedCase.busData[gen.busNumber].name) 
+			ax4.plot(tspan,EFD, label = reducedCase.busData[gen.busNumber].name)
+			ax5.plot(tspan, y[:,i+5], label = reducedCase.busData[gen.busNumber].name)
+			ax6.plot(tspan, y[:,i+7], label = reducedCase.busData[gen.busNumber].name)
 			i += 8
-
 
 	ax1.set_ylabel(r'Speed $\omega$')
 	ax2.set_ylabel(r'Angle deviation $\delta$')
+	ax3.set_ylabel(r'Induced voltage $E^\prime_q$')
+	ax4.set_ylabel(r'Field voltage $E_{FD}$')
+	ax5.set_ylabel(r'AVR voltage $V_{AVR}$')
+	ax6.set_ylabel(r'PSS voltage $V_{PSS}$')
+
 	ax1.legend()
 	ax1.grid(True)
+
 	ax2.legend()
 	ax2.grid(True)
+
+	ax3.legend()
+	ax3.grid(True)
+
+	ax4.legend()
+	ax4.grid(True)
+
+	ax5.legend()
+	ax5.grid(True)
+
+	ax6.legend()
+	ax6.grid(True)
+
 
 	pyplot.show()

@@ -139,6 +139,7 @@ def loadCase(fileName,**kwargs):
 			raise dataCardError(' >> Generator PU reference declared is wrong or was not found. Please inform a valid option SYSTEM or GENERATOR.')
 
 		line = fileData.readline()	# Skip --- line
+		line = fileData.readline()	# Skip --- line
 
 		genList = []	# genList was named like so because there already is a genData variable in the program
 		while True:

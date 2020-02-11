@@ -52,6 +52,6 @@ case = lC.loadCase(netFile)
 #Yred, C, D, reducedCase = case.reduceMatrixes()
 #print(reducedCase)
 
-disturbanceData = ['Bus 003', -(10 + 1j*5), 1]
-dS(case, disturbanceData, 100)
+disturbanceData = ['Bus 003', 0*(10 + 1j*5), 1]
+dS(case, disturbanceData, 1000)
 #print(case)
