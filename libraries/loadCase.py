@@ -107,7 +107,6 @@ def loadCase(fileName,**kwargs):
 				# Searching for the number of the tap bus
 				for bus in busList:
 					if str(line[0]) == bus.name:
-						fromBus = bus.number
 						break
 				else:	# If break was not done it was because the tap bus name declared does not exist
 					raise dataCardError(' >> Netfile error: there is a branch declared with non-declared tap bus \'{0}\''.format(line[0]))
@@ -117,7 +116,6 @@ def loadCase(fileName,**kwargs):
 				for bus in busList:
 					#print(bus.name)
 					if str(line[1]) == bus.name:
-						toBus = bus.number
 						break
 				else:	# If break was not done it was because the Z bus name declared does not exist
 					raise dataCardError(' >> Netfile error: there is a branch declared with non-declared Z bus \'{0}\''.format(line[1]))
@@ -125,7 +123,7 @@ def loadCase(fileName,**kwargs):
 
 				if float(line[14]) == 0: 
 					raise dataCardError(' >> Netfile error: branch from bus \'{}\' to bus \'{}\' has a turns ratio of 0.'.format(busList[fromBus].name,busList[toBus].name))
-				else: branchList.append(cL.branch(0,fromBus,toBus,line[6],line[7],line[8],line[9],line[14],float(line[15])*np.pi/180))
+				else: branchList.append(cL.branch(0,line[0],line[1],line[6],line[7],line[8],line[9],line[14],float(line[15])*np.pi/180))
 
 		# Just likle with the buses, i is the branch number counter. It is used to assign the branch numbers that will be used by the program; branch numbers are assigned in the order they appear in the netfile.
 		for i in range(len(branchList)): branchList[i].number = i
@@ -151,7 +149,6 @@ def loadCase(fileName,**kwargs):
 			else:
 				for bus in busList:
 					if str(line[0]) == bus.name:
-						genBus = bus.number
 						break
 				else:	# If break was not done it was because the tap bus name declared does not exist
 					raise dataCardError(' >> Netfile error: there is a generator declared with non-declared bus \'{0}\''.format(line[0]))
@@ -159,7 +156,7 @@ def loadCase(fileName,**kwargs):
 
 
 				# Creating the new generator instance to be added
-				newGen = cL.generator(genBus, line[1], line[2], line[3], line[4], line[5], line[6], line[7], line[8], line[9], line[10], line[11], line[12], line[13], line[14], line[15], line[16], line[17], line[18], line[19], line[20], line[21], line[22], line[23], line[24], line[25], line[26])
+				newGen = cL.generator(line[0], line[1], line[2], line[3], line[4], line[5], line[6], line[7], line[8], line[9], line[10], line[11], line[12], line[13], line[14], line[15], line[16], line[17], line[18], line[19], line[20], line[21], line[22], line[23], line[24], line[25], line[26])
 
 				# If the parameters of the generator were given in relation with the generator PU system, they should be converted to the system's PU
 				if genDataPUReference == 'GENERATOR' or genDataPUReference == 'generator':
@@ -175,10 +172,10 @@ def loadCase(fileName,**kwargs):
 					
 				genList.append(newGen)
 	
-		# Sorting generators by their bus number
-		for i in range(len(genList)):
-			for j in range(len(genList)):
-				if genList[i].busNumber < genList[j].busNumber: genList[i], genList[j] = genList[j], genList[i]
+#		# Sorting generators by their bus number
+#		for i in range(len(genList)):
+#			for j in range(len(genList)):
+#				if genList[i].busNumber < genList[j].busNumber: genList[i], genList[j] = genList[j], genList[i]
 		
 		# Fault data ---------------------------------------------------
 		# Searching for fault data start card 

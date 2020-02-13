@@ -80,7 +80,7 @@ class case:
 
 	# runPowerFlow() runs the power flow of the case and updates the finalVoltage and finalAngle attributes of the bus instances in the busData list. If the power flow method is not successful it returns a false value.
 	def runPowerFlow(self):
-		V, theta, r, elapsed, itCount, success = pF.powerFlow(self)
+		V, theta, r, itCount, success = pF.powerFlow(self)
 		if not success:
 			print(' >>> Power flow update for case class instance returned not successful because the power flow method did not converge.')
 			V, theta = array(['None']*self.nBus), array(['None']*self.nBus)
@@ -97,8 +97,8 @@ class case:
 				self.busData[k].finalAngle = 180/pi*theta[k]
 			
 			for k in range(len(self.branchData)):
-				j = self.branchData[k].fromBus
-				n = self.branchData[k].toBus
+				j = self.getBusNumber(self.branchData[k].fromBus)
+				n = self.getBusNumber(self.branchData[k].toBus)
 				self.branchData[k].activeTransfer = (self.a[j,n]*V[j])**2*self.g[j,n] - self.a[j,n]*self.a[n,j]*V[j]*V[n]*(self.g[j,n]*cos(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) + self.b[j,n]*sin(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]))
 				self.branchData[k].reactiveTransfer = -(self.a[j,n]*V[j])**2**(self.b[j,n] + self.bsh[j,n]) + self.a[j,n]*self.a[n,j]*V[j]*V[n]*( -self.g[j,n]*sin(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) + self.b[j,n]*cos(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) )
 				self.branchData[k].activeLoss = self.g[j,n]*np.abs(V[j]*np.exp(1j*theta[j]) - V[n]*np.exp(1j*theta[n]))**2
@@ -121,24 +121,27 @@ class case:
 		K = [ [] for i in range(self.nBus)]
 		
 		for branch in self.branchData:
-			K[branch.fromBus] += [branch.toBus]
-			K[branch.toBus] += [branch.fromBus]
+			fromBusN = self.getBusNumber(branch.fromBus)
+			toBusN = self.getBusNumber(branch.toBus)
 
-			r[branch.fromBus,branch.toBus] = branch.r
-			r[branch.toBus,branch.fromBus] = branch.r
+			K[fromBusN] += [toBusN]
+			K[toBusN] += [fromBusN]
 
-			x[branch.fromBus,branch.toBus] = branch.x
-			x[branch.toBus,branch.fromBus] = branch.x
+			r[fromBusN, toBusN] = branch.r
+			r[toBusN, fromBusN] = branch.r
 
-			gsh[branch.fromBus,branch.toBus] = branch.gsh	
-			gsh[branch.toBus,branch.fromBus] = branch.gsh
+			x[fromBusN, toBusN] = branch.x
+			x[toBusN, fromBusN] = branch.x
 
-			bsh[branch.fromBus,branch.toBus] = branch.bsh	
-			bsh[branch.toBus,branch.fromBus] = branch.bsh
+			gsh[fromBusN, toBusN] = branch.gsh	
+			gsh[toBusN, fromBusN] = branch.gsh
 
-			phi[branch.fromBus,branch.toBus] = branch.phi
+			bsh[fromBusN, toBusN] = branch.bsh	
+			bsh[toBusN, fromBusN] = branch.bsh
 
-			if branch.a != 0: a[branch.fromBus,branch.toBus] = branch.a
+			phi[fromBusN, toBusN] = branch.phi
+
+			a[fromBusN, toBusN] = branch.a
 
 		for k in range(self.nBus): bsh[k,k] = self.busData[k].bsh
 		
@@ -182,100 +185,55 @@ class case:
 		tempCase.busData[i].number = i
 		tempCase.busData[j].number = j
 
-		# After the bus data is swapper, the branch list must reflect that. For instance, if bus 3 and 5 were swapped (5 now is 3 and 3 now is 5), then the branch data still does not contemplate this change: the bus numbers are still attached to the old list. This also happens with the generator data, where the old bus numbers are stil valid. The following loops are meant to change bus numbers in branches and generators.	
-		for branch in tempCase.branchData:
-			if branch.fromBus == i: branch.fromBus = j
-			elif branch.fromBus == j: branch.fromBus = i
-
-			if branch.toBus == i: branch.toBus = j
-			elif branch.toBus == j: branch.toBus = i
-		
 		tempCase.updateMatrixes()
 
-		for gen in tempCase.genData:
-			if gen.busNumber == i: gen.busNumber = j
-			elif gen.busNumber == j: gen.busNumber = i
-
-		return tempCase	
+		return tempCase
 
 # isGen(busN) returns True if the bus with number busN has a generator attached to it.
-	def isGen(self,busN):
+	def isGen(self, busName):
 		for gen in self.genData:
-			if int(gen.busNumber) == busN:
-				return True
+			if gen.busName == busName: return True
 
 		return False
 
 # The 'reduceMatrixes' method returns the matrixes of the reduced system. In order to do this, the system will need to be reorganized so that the buses attached to a generator are numbered first. Since this method alters the sequence of buses (that is, it reorganizes the number of the buses), it is recommended that this method be run through a copied instance, that is, run 'reducedCase = copy(case)' and then 'reducedCase.reduceGrid()'. Although this may seem like a problem, given that the user will not know which buses were re-numbered, the bus names defined won'be altered, meaning that the human-readable names do not change. This ultimately means that it is imperative to give each bus a human-readable name. 
 # In order to do all this, the method creates a copy of the original case, called 'rCase' for 'reduced case', upon which it will operate and swap buses.
 	def reduceMatrixes(self):
-		rCase = copy(self)	# New case rCase (for "reduced Case")
-		rCase.name = 'Reduced ' + rCase.name	# Adding the 'Reduced' word to the case ID so that it is distinguishable from the original case
-		nBus = rCase.nBus
-		nGen = rCase.nGen
-
-		for i in range(rCase.nBus):
-				if not rCase.isGen(i):
-					for j in range(i+1, rCase.nBus):
-						if rCase.isGen(j):
-							rCase = rCase.swapBuses(rCase.busData[i].name, rCase.busData[j].name)
-
-	
-		success = rCase.runPowerFlow()
-		if not success:
-			raise 	Exception('>> Case {} reduction not possible because the power flow method did not converge.'.format(case.name))
-
-		V = array([bus.finalVoltage for bus in rCase.busData])
-		theta = array([bus.finalAngle for bus in rCase.busData])
-
-		# YLoad is the equivalent conductance load matrix. In a reduced case model, bus loads are modelled as constant impedances. So the equivalent 
-		YLoad = [(bus.pLoad/rCase.Sb - 1j*bus.qLoad/rCase.Sb)/bus.finalVoltage**2 for bus in rCase.busData]		
-	
-		for i in range(rCase.nBus):
-			rCase.busData[i].pLoad, rCase.busData[i].qLoad = 0, 0
-			rCase.busData[i].gsh += np.real(YLoad[i])
-			rCase.busData[i].bsh += np.imag(YLoad[i])
-
-		rCase.updateMatrixes()
-		
 		# Building component matrixes
-
-		Y1 = rCase.Y[0 : nGen, 0 : nGen]
-		Y2 = rCase.Y[0 : nGen , nGen : nBus + 1]
-		Y3 = rCase.Y[nGen : nBus , 0 : nGen]
-		Y4 = rCase.Y[nGen : nBus + 1 , nGen : nBus + 1]
-
-		Ylg = np.diag(YLoad[0:nGen])
-
-		Yll = np.diag(YLoad[nGen:nBus])
-
-		Ytrans = np.array([1/(gen.ra + 1j*gen.xPq) for gen in rCase.genData]) # Y' no livro
-		Ytrans = np.diag(Ytrans)
+		nGen, nBus = self.nGen, self.nBus
+		success = self.runPowerFlow()
+		tempCase = copy(self)
+		tempCase.name = 'Reduced ' + self.name
+		if not success: raise Exception(' Case \'{}\' matrix reduction not possible because the power flow calculations returned not successful'.format(self.name))
 		
-		YA = Ytrans
+		for i in range(nBus):
+			for j in range(i+1, nBus):
+				if tempCase.isGen(tempCase.busData[j].name) and not tempCase.isGen(tempCase.busData[i].name):
+					tempCase = tempCase.swapBuses(tempCase.busData[i].name, tempCase.busData[j].name)
+					print('SWAP')
 
-		YB = conc((-Ytrans,np.zeros((nGen,nBus-nGen))),axis=1)
-		
-		YC = conc((-Ytrans,np.zeros((nBus-nGen,nGen))),axis=0)
+		#tempCase.updateMatrixes()
 
-		YDtop = conc((Ytrans+Y1+Ylg,Y2),axis=1)
-		YDbot = conc((Y3,Y4 + Yll),axis=1)
+		YL = np.diag([ (tempCase.busData[k].pLoad  - 1j*tempCase.busData[k].qLoad)/tempCase.busData[k].finalVoltage**2 for k in range(tempCase.nBus)])/tempCase.Sb
+		Y = copy(tempCase.Y)
+		Y += YL
 
-		YD = conc((YDtop,YDbot),axis=0)
+		for k in range(tempCase.nBus):
+			bus = tempCase.busData[k]
+			bus.pLoad, bus.qLoad = 0, 0
+			bus.gsh += np.real(YL[k, k])
+			bus.bsh += np.imag(YL[k, k])
 
-		# Calculating YRED and C and D coefficients
+		tempCase.updateMatrixes()
 
-		Yred = YA - YB @ inv(YD) @ YC
-		V = array([ bus.finalVoltage for bus in rCase.busData])
-		C = np.array([ [ V[i]*V[j]*imag(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
-		D = np.array([ [ V[i]*V[j]*real(Yred[i,j]) if j != i else 0 for j in range(nGen)] for i in range(nGen)])
+		Y1 = Y[0 : nGen, 0 : nGen]
+		Y2 = Y[0 : nGen , nGen : nBus]
+		Y3 = Y[nGen : nBus , 0 : nGen]
+		Y4 = Y[nGen : nBus , nGen : nBus]
 
-		# Sorting generators by their bus number
-		for i in range(len(rCase.genData)):
-			for j in range(len(rCase.genData)):
-				if rCase.genData[i].busNumber < rCase.genData[j].busNumber: rCase.genData[i], rCase.genData[j] = rCase.genData[j], rCase.genData[i]
+		Yred = Y1 - Y2 @ inv(Y4) @ Y3
 
-		return [Yred,C,D,rCase]
+		return Yred, tempCase
 
 	def printBusData(self,**kwargs):
 		if 'tablefmt' in kwargs: tableformat = kwargs['tablefmt']
@@ -294,8 +252,8 @@ class case:
 
 		print('\n >> Case \'{0}\' branch list'.format(self.name))
 		tabRows = []
-		tabHeader = ['Number','From Bus\n(Tap bus)', 'Tap bus N', 'To Bus\n(Z bus)', 'Z bus N', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt conductance\n gsh (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)', 'Transformer\nphase shift (phi)', 'Active\nPower Transfer (MW)', 'Reactive\nPower Transfer (MVAR)', 'Active\nPower Loss (MW)', 'Reactive\nPower Loss (MVAR)', 'Reactive\nShunt Generated\nPower (MVAR)']
-		for branch in self.branchData: tabRows.append([branch.number,self.busData[branch.fromBus].name, branch.fromBus, self.busData[branch.toBus].name, branch.toBus, branch.r, branch.x, branch.gsh, branch.bsh, branch.a,branch.phi*180/np.pi, branch.activeTransfer*self.Sb, branch.reactiveTransfer*self.Sb, branch.activeLoss*self.Sb, branch.reactiveLoss*self.Sb, branch.shuntReactivePower*self.Sb])
+		tabHeader = ['Number','From Bus\n(Tap bus)', 'To Bus\n(Z bus)', 'Resistance\n r (p.u.)', 'Reactance\n x (p.u.)', 'Shunt conductance\n gsh (p.u.)', 'Shunt susceptance\n bsh (p.u.)', 'Transformer\nturns ratio (a)', 'Transformer\nphase shift (phi)', 'Active\nPower Transfer (MW)', 'Reactive\nPower Transfer (MVAR)', 'Active\nPower Loss (MW)', 'Reactive\nPower Loss (MVAR)', 'Reactive\nShunt Generated\nPower (MVAR)']
+		for branch in self.branchData: tabRows.append([branch.number, branch.fromBus, branch.toBus, branch.r, branch.x, branch.gsh, branch.bsh, branch.a,branch.phi*180/np.pi, branch.activeTransfer*self.Sb, branch.reactiveTransfer*self.Sb, branch.activeLoss*self.Sb, branch.reactiveLoss*self.Sb, branch.shuntReactivePower*self.Sb])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -307,7 +265,7 @@ class case:
 		tabRows = []
 		tabHeader = ['Bus', 'Rated Power (MW)', 'H (p.u.)', 'D (p.u.)', 'ra (p.u.)', 'xL (p.u.)', 'xd (p.u.)', 'xPd (p.u.)', 'xPPd (p.u.)', 'tPdo (s)', 'tPPdo (s)', 'xq (p.u.)', 'xPq (p.u.)', 'xPPq (p.u.)', 'tPqo (s)', 'tPPqo (s)', 'Ke (-)', 'Te (s)', 'vRef (p.u.)', ' KPss (-)', 'T1 (s)', 'T1 (s)', 'tG (s)', 'tT (s)', 'Depth']
 		for gen in self.genData:
-			tabRows.append([self.busData[gen.busNumber].name, gen.ratedPower,gen.H, gen.D, gen.ra, gen.xL, gen.xd, gen.xPd, gen.xPPd, gen.tPdo, gen.tPPdo, gen.xq, gen.xPq, gen.xPPq, gen.tPqo, gen.tPPqo, gen.Ke, gen.Te, gen.vRef, gen.KPss, gen.T1, gen.T2, gen.tG, gen.tT, gen.modelDepth])
+			tabRows.append([gen.busName, gen.ratedPower,gen.H, gen.D, gen.ra, gen.xL, gen.xd, gen.xPd, gen.xPPd, gen.tPdo, gen.tPPdo, gen.xq, gen.xPq, gen.xPPq, gen.tPqo, gen.tPPqo, gen.Ke, gen.Te, gen.vRef, gen.KPss, gen.T1, gen.T2, gen.tG, gen.tT, gen.modelDepth])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))	
 
@@ -370,8 +328,8 @@ class bus:
 class branch:
 	def __init__(self,number,fromBus,toBus,r,x,gsh,bsh,a,phi,activeTransfer = 0,reactiveTransfer = 0, activeLoss = 0, reactiveLoss = 0, shuntReactivePower = 0):
 		self.number = int(number)
-		self.fromBus = int(fromBus)
-		self.toBus = int(toBus)
+		self.fromBus = str(fromBus)
+		self.toBus = str(toBus)
 		self.r = float(r)
 		self.x = float(x)
 		self.gsh = float(gsh)
@@ -396,8 +354,8 @@ class branch:
 # --> "tPqo" and "tPdo" are the rotor quadrature- and direct-axis transient time constants;
 # --> "tPPqo" and "tPPdo" are rotor quadrature- and direct-axis sub-transient time constants;
 class generator:
-	def __init__(self,busNumber,ratedPower,ratedVoltage,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo, Ke, Te, vRef, KPss, Tw, T1, T2, tG, tT, modelDepth):
-		self.busNumber = int(busNumber)
+	def __init__(self,busName,ratedPower,ratedVoltage,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo, Ke, Te, vRef, KPss, Tw, T1, T2, tG, tT, modelDepth):
+		self.busName = str(busName)
 		self.ratedPower = float(ratedPower)
 		self.ratedVoltage = float(ratedVoltage)
 		self.H = float(H)

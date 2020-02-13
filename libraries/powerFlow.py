@@ -84,19 +84,12 @@ def powerFlow(case,**kwargs):
 
 	itCount = 0
 	verbose = 0
-	# (5.6) Start time counte6
-	tstart = time.time()
+
 	# -------------------------------------------------
 	# STARTING NUMERICAL METHOD FOR POWER FLOW
 	# -------------------------------------------------
 	if verbose > 0: print(' --> Beggining power flow method on case \'{0}\'...'.format(case.name))
 	while(True):	# STARTING ITERATIONS
-
-#		for i in range(case.nBus):
-#			if case.busData[i].pLoad != 0 and case.busData[i].qLoad**2 != 0:
-#				case.busData[i].gsh = -V[i]**2*case.busData[i].pLoad/(case.busData[i].pLoad**2 + case.busData[i].qLoad**2)
-#				case.busData[i].bsh = -V[i]**2*case.busData[i].qLoad/(case.busData[i].pLoad**2 + case.busData[i].qLoad**2)
-#		case.updateMatrixes()
 
 		# Increasing iteration counter
 		itCount += 1
@@ -140,9 +133,6 @@ def powerFlow(case,**kwargs):
 		# Pausing for each iteration
 		if verbose > 1: input('\n --> Power flow method paused for next iteration. Press <ENTER> to continue.')
 
-	# Calculating elapsed time
-	elapsed = time.time() - tstart
-
 	# Printing results
 	if verbose > 0:
 
@@ -162,4 +152,4 @@ def powerFlow(case,**kwargs):
 
 		else: print(' --> Power flow method not successful at iteration {0} with step increment |dX| = {1}.'.format(itCount,norm(dX)))
 
-	return [V, theta, norm(dX), elapsed, itCount, success]
+	return [V, theta, norm(dX), itCount, success]
