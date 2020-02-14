@@ -202,29 +202,26 @@ class case:
 		# Building component matrixes
 		nGen, nBus = self.nGen, self.nBus
 		success = self.runPowerFlow()
-		tempCase = copy(self)
-		tempCase.name = 'Reduced ' + self.name
+		rCase = copy(self)
+		rCase.name = 'Reduced ' + self.name
 		if not success: raise Exception(' Case \'{}\' matrix reduction not possible because the power flow calculations returned not successful'.format(self.name))
 		
 		for i in range(nBus):
 			for j in range(i+1, nBus):
-				if tempCase.isGen(tempCase.busData[j].name) and not tempCase.isGen(tempCase.busData[i].name):
-					tempCase = tempCase.swapBuses(tempCase.busData[i].name, tempCase.busData[j].name)
-					print('SWAP')
+				if rCase.isGen(rCase.busData[j].name) and not rCase.isGen(rCase.busData[i].name):
+					rCase = rCase.swapBuses(rCase.busData[i].name, rCase.busData[j].name)
 
-		#tempCase.updateMatrixes()
-
-		YL = np.diag([ (tempCase.busData[k].pLoad  - 1j*tempCase.busData[k].qLoad)/tempCase.busData[k].finalVoltage**2 for k in range(tempCase.nBus)])/tempCase.Sb
-		Y = copy(tempCase.Y)
+		YL = np.diag([ (rCase.busData[k].pLoad  - 1j*rCase.busData[k].qLoad)/rCase.busData[k].finalVoltage**2 for k in range(rCase.nBus)])/rCase.Sb
+		Y = copy(rCase.Y)
 		Y += YL
 
-		for k in range(tempCase.nBus):
-			bus = tempCase.busData[k]
+		for k in range(rCase.nBus):
+			bus = rCase.busData[k]
 			bus.pLoad, bus.qLoad = 0, 0
 			bus.gsh += np.real(YL[k, k])
 			bus.bsh += np.imag(YL[k, k])
 
-		tempCase.updateMatrixes()
+		rCase.updateMatrixes()
 
 		Y1 = Y[0 : nGen, 0 : nGen]
 		Y2 = Y[0 : nGen , nGen : nBus]
@@ -233,7 +230,11 @@ class case:
 
 		Yred = Y1 - Y2 @ inv(Y4) @ Y3
 
-		return Yred, tempCase
+		# Reorganizing the first buses according to their generator order
+		for i in range(rCase.nGen):
+			for j in range(i, rCase.nGen):
+				if rCase.getBusNumber(rCase.genData[i].busName) > rCase.getBusNumber(rCase.genData[j].busName) : rCase.genData[i], rCase.genData[j] = rCase.genData[j], rCase.genData[i]
+		return Yred, rCase
 
 	def printBusData(self,**kwargs):
 		if 'tablefmt' in kwargs: tableformat = kwargs['tablefmt']

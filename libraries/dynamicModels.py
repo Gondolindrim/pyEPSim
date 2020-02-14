@@ -45,9 +45,9 @@ def SMC(x,*args): #{{{1
 	Elq = np.real(genData.el0)	# Same as mechanical power
 	Eld = np.imag(genData.el0)
 	
-	omegaP = ( pm - Elq*Iq - D*omega )/(2*H)	# omega = x[k+1]	
-	deltaP = omega
-	return [omegaP, deltaP] #}}}1
+	domega = ( pm - Elq*Iq - ELd*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)	
+	ddelta = omega
+	return [domega, ddelta] #}}}1
 
 # Synchronous machine one-axis (third-order) model
 def SM1A(x,*args): #{{{1
@@ -68,8 +68,8 @@ def SM1A(x,*args): #{{{1
 	xd = genData.xd
 	pm = genData.pm0	# Mechanical power is constant equal to its initial value
 
-	dElq = 1/tPdo*(EFD0 - Elq - (xd - xPd)*Id)
-	domega = ( pm - Elq*Iq - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
+	dElq = 1/tPdo*(EFD0 - Elq + (xd - xPd)*Id)
+	domega = ( pm - Elq*Iq - ELd*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta = omega
 
 	return [dElq, domega, ddelta] #}}}1
@@ -95,8 +95,8 @@ def SM1A_TUR_GOV(x,*args): #{{{1
 	tG = genData.tG
 	tT = genData.tT
 
-	dElq = 1/tPdo*(EFD0 - Elq - (xd - xPd)*Id)
-	domega = ( pm - Elq*Iq - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
+	dElq = 1/tPdo*(EFD0 - Elq + (xd - xPd)*Id)
+	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
@@ -139,10 +139,10 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	Vd = Eld - r*Id - xPq*Iq
 	Vt = np.sqrt(Vq**2 + Vd**2)
 
-	#print('\n >>> Gen {} passed EL = {}'.format(genData.busNumber, Elq + 1j*Eld))
-	#print(' >>> Gen {} passed I = {}'.format(genData.busNumber, Iq + 1j*Id))
-	#print(' >>> Gen {} model Vt = {}'.format(genData.busNumber,Vq + 1j*Vd))
-	#print(' >>> Gen {} model Vt0 = {}'.format(genData.busNumber,Vt0))
+	#print('\n >>> Gen \'{}\' passed EL = {}'.format(genData.busName, Elq + 1j*Eld))
+	#print(' >>> Gen \'{}\' passed I = {}'.format(genData.busName, Iq + 1j*Id))
+	#print(' >>> Gen \'{}\' model Vt = {}'.format(genData.busName,Vq + 1j*Vd))
+	#print(' >>> Gen \'{}\' model Vt0 = {}'.format(genData.busName,Vt0))
 
 	Tw = genData.Tw
 	T1 = genData.T1
@@ -150,19 +150,17 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 
 	EFD = EFD0 + vAVR + vPSS
 
-	dElq = 1/tPdo*(EFD - Elq - (xd - xPd)*Id)
+	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
 	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
 	dvAVR = (Ke*(Vt - Vt0) - vAVR)/Te
 
-	#print(' >>> Gen {} model Vt - Vtref = {}\n'.format(genData.busNumber,Vt - Vt0))
+	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
 
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
-
-	k = genData.busNumber
 
 	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
 

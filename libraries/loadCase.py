@@ -154,21 +154,21 @@ def loadCase(fileName,**kwargs):
 					raise dataCardError(' >> Netfile error: there is a generator declared with non-declared bus \'{0}\''.format(line[0]))
 					break
 
-
 				# Creating the new generator instance to be added
 				newGen = cL.generator(line[0], line[1], line[2], line[3], line[4], line[5], line[6], line[7], line[8], line[9], line[10], line[11], line[12], line[13], line[14], line[15], line[16], line[17], line[18], line[19], line[20], line[21], line[22], line[23], line[24], line[25], line[26])
 
 				# If the parameters of the generator were given in relation with the generator PU system, they should be converted to the system's PU
 				if genDataPUReference == 'GENERATOR' or genDataPUReference == 'generator':
-					newGen.H *= newGen.ratedPower/Sb
-					newGen.ra *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
-					newGen.xL *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
-					newGen.xd *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
-					newGen.xPd *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
-					newGen.xPPd *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
-					newGen.xq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
-					newGen.xPq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
-					newGen.xPPq *= (newGen.ratedPower/newGen.ratedVoltage**2)/(Sb/Vb**2)
+					m = (newGen.ratedVoltage**2/newGen.ratedPower)/(Vb**2/Sb)
+					newGen.H *= m
+					newGen.ra *= m
+					newGen.xL *= m
+					newGen.xd *= m
+					newGen.xPd *= m
+					newGen.xPPd *= m
+					newGen.xq *= m
+					newGen.xPq *= m
+					newGen.xPPq *= m
 					
 				genList.append(newGen)
 	
