@@ -394,6 +394,13 @@ class generator:
 		self.vRef = float(vRef)
 		self.modelDepth = int(modelDepth)
 
+		self.kQ = 1
+		self.kP = 1
+		self.P0	= 1
+		self.Q0 = 0
+		self.w0 = 0
+		self.V0 = 0
+
 	def __str__(self):
 		tableformat = 'psql' 
 

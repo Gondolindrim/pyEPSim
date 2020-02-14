@@ -96,6 +96,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		print(' >>> Ib = {}.'.format(Iq + 1j*Id))
 
 		gen.vRef = np.abs(V0[k])
+		gen.V0 = gen.vRef
 		#print( ' >>> gen VREF = {}, Vt = {}'.format(gen.vRef, np.sqrt(Vq**2 + Vd**2)))
 		print(' >> Set gen VREF = {}'.format(gen.vRef))
 
@@ -110,10 +111,13 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		delta = np.angle(ELq + 1j*ELd)
 		gen.delta0 = delta
 		gen.omega0 = 0
+		gen.w0 = gen.omega0
 
 		pm0 = ELq*Iq + ELd*Id + (xPd - xPq)*Iq*Id
 		if gen.modelDepth == 1: pm0 = ELq*Iq
 		gen.pm0 = pm0
+		gen.P0 = pm0
+
 		#print(' >>> PM0 = {}'.format(pm0))
 
 		EFD0 = ELq - (xd - xPd)*Id
@@ -124,7 +128,9 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		dvAVR = (gen.Ke*(np.abs(V0[k]) - gen.vRef) - gen.vAVR0)/gen.Te
 		#print(' >>> dvAVR = {}'.format(dvAVR))
 		#print(' >>> VRef = {}, V0 = {}'.format(gen.vRef, np.abs(V0[k])))
-	
+
+		gen.Q0 = Vd*Iq - Vq*Id
+
 		if gen.modelDepth == 1:
 			x0.extend([gen.omega0,gen.delta0])
 	#		print(SMC([0,delta],Iq + 1j*Id, gen))
@@ -133,9 +139,8 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 	#		print(SM1A([ELq,0,delta],Iq + 1j*Id, gen))
 		if gen.modelDepth == 3:
 			x0.extend([ELq, gen.omega0, gen.delta0, pm0, 0])
-		if gen.modelDepth == 4:
+		if gen.modelDepth in [4,5]:
 			x0.extend([ELq, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0])
-			print(' >>> Differential equations for gen at bus \'{}\' at initial time: {}'.format(gen.busName, SM1A_TUR_GOV_AVR_PSS([ELq, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0],Iq + 1j*Id, gen)))
 
 	#print(' >>> Induced voltages at initial point = {}\n'.format(EL))
 	#print(' >>> deltaQD at initial point = {}\n'.format(deltaQD))
@@ -227,7 +232,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 				EL[k] = x[i] + 1j*np.imag(gen.el0)
 				angleReferences[k] = deltaQD[k]
 				i += 5
-			elif gen.modelDepth == 4:
+			elif gen.modelDepth in [4,5]:
 				EL[k] = x[i] + 1j*np.imag(gen.el0)
 				angleReferences[k] = deltaQD[k]
 				i += 8
@@ -256,6 +261,9 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 				i += 5
 			elif gen.modelDepth == 4:
 				F.extend(SM1A_TUR_GOV_AVR_PSS([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7]], Iq + 1j*Id, gen))
+				i += 8
+			elif gen.modelDepth == 5:
+				F.extend(SM1A_TUR_GOV_AVR_PSS_PFQV([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7]], Iq + 1j*Id, gen))
 				i += 8
 
 		#print(' >>> Induced voltages calculated at time {} = {}'.format(t, EL))	
@@ -292,7 +300,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax1.plot(tspan,y[:,i+1], label = gen.busName)
 			ax2.plot(tspan,y[:,i+2], label = gen.busName)
 			i += 5
-		if gen.modelDepth == 4:
+		if gen.modelDepth in [4,5]:
 			ax1.plot(tspan,y[:,i+1], label = gen.busName)
 			ax2.plot(tspan,y[:,i+2], label = gen.busName)
 			EFD = [gen.efd0 + y[k,i+5] + y[k,i+6] for k in range(len(tspan))] 

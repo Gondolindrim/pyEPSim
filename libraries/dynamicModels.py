@@ -164,6 +164,71 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 
 	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
 
+# Synchronous machine one-axis (third-order) model with turbine, governor, AVR and PSS equations
+def SM1A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
+	Ig, genData = args
+	Iq, Id = np.real(Ig), np.imag(Ig)
+	
+	Elq = x[0]
+	Eld = np.imag(genData.el0)
+	omega = x[1]
+	delta = x[2]
+	pm = x[3]
+	pPm = x[4]
+	vAVR = x[5]
+	vWash = x[6]
+	vPSS = x[7]
+	
+	H = genData.H
+	D = genData.D
+	r = genData.ra
+	EFD0 = genData.efd0
+	tPdo = genData.tPdo
+	xPd = genData.xPd
+	xPq = genData.xPq
+	xd = genData.xd
+	tG = genData.tG
+	tT = genData.tT
+
+	KPss = genData.KPss
+	Ke = genData.Ke
+	Te = genData.Te
+	
+	Vq = Elq - r*Iq + xPd*Id
+	Vd = Eld - r*Id - xPq*Iq
+	Vt = np.sqrt(Vq**2 + Vd**2)
+
+	# Droop equations
+	P = Vq*Iq + Vd*Id
+	Q = Vd*Iq - Vq*Id
+	pmSet = genData.P0 - genData.kP * omega
+	Vt0 = genData.V0 - (Q - genData.Q0)/genData.kQ
+
+	#print('\n >>> Gen \'{}\' passed EL = {}'.format(genData.busName, Elq + 1j*Eld))
+	#print(' >>> Gen \'{}\' passed I = {}'.format(genData.busName, Iq + 1j*Id))
+	#print(' >>> Gen \'{}\' model Vt = {}'.format(genData.busName,Vq + 1j*Vd))
+	#print(' >>> Gen \'{}\' model Vt0 = {}'.format(genData.busName,Vt0))
+
+	Tw = genData.Tw
+	T1 = genData.T1
+	T2 = genData.T2
+
+	EFD = EFD0 + vAVR + vPSS
+
+	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
+	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
+	ddelta  = omega
+	dpm = pPm
+	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
+	dvAVR = -(Ke*(Vt - Vt0) + vAVR)/Te
+
+	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
+
+	dvWash = KPss*domega - vWash/Tw
+	dvPSS = (T2*dvWash + vWash - vPSS)/T1
+
+	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
+
 # Synchronous machine two-axis (fourth-order) model with turbine, governor, AVR and PSS equations
 def SM2A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	k, V, Y, genData = args
