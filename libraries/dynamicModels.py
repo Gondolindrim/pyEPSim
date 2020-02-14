@@ -10,20 +10,41 @@
 # -------------------------------------------------
 import numpy as np
 # Algebraic function for solving V and I
-def solveI(x,*args): #{{{
-	Elq, Eld, ra, xPq, xPd, Y, k, V = args
-	Iq = x[0]
-	Id = x[1]
-	Vq = x[2]
-	Vd = x[3]
+def solveCurrents(y, *args):	#{{{1
+	Y, EL, angles, case = args
+	#print('\n >>> Passed angleReferences = {}'.format(angles))
+	#print(' >>> Passed EL = {}'.format(EL))
 
-	V[k] = Vq + 1j*Vd
+	nGen  = case.nGen
 
-	F0 = Iq - np.real(sum([Y[k,m]*V[m] for m in range(len(Y))]))
-	F1 = Id - np.imag(sum([Y[k,m]*V[m] for m in range(len(Y))]))
-	F2 = -Vq + Elq - ra*Iq + xPd*Id
-	F3 = -Vd + Eld - ra*Id - xPq*Iq
-	return [F0, F1, F2, F3] #}}}
+	F = np.zeros(2*nGen, dtype = float)
+	V = [y[k] + 1j*y[k + nGen] for k in range(nGen)]
+
+	I = Y @ V
+	#print(I)
+	for k in range(case.nGen):
+		# I and V are the current and voltage vectors in the synchronous reference
+		gen = case.genData[k]
+		ELq = np.real(EL[k])
+		ELd = np.imag(EL[k])
+	
+		Imachine = I[k]*np.e**(-1j*angles[k])
+		Vmachine = V[k]*np.e**(-1j*angles[k])
+
+		#print(' >>> Imachine = {}'.format(Imachine))
+		Iq = np.real(Imachine)
+		Id = np.imag(Imachine)
+
+		Vq = np.real(Vmachine)
+		Vd = np.imag(Vmachine)
+		#print(Vq + 1j*Vd)
+		
+		F[k] = Vq - ELq + gen.ra*Iq - gen.xPd*Id
+		F[k + nGen] = Vd - ELd + gen.ra*Id + gen.xPq*Iq
+		
+	#print('>>> Calculated F function norm = {}\n'.format(F))
+	#input()
+	return F	#}}}
 
 # Synchronous machine second-order model with damping
 def SMC(x,*args): #{{{1
@@ -164,7 +185,7 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 
 	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
 
-# Synchronous machine one-axis (third-order) model with turbine, governor, AVR and PSS equations
+# Synchronous machine one-axis (third-order) model with turbine, governor, AVR and PSS equations, and PF-QV droop control
 def SM1A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	Ig, genData = args
 	Iq, Id = np.real(Ig), np.imag(Ig)
@@ -228,6 +249,73 @@ def SM1A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
 	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
+
+# Synchronous machine one-axis (third-order) model with turbine, governor, AVR and PSS equations, and PF-Q(dV) droop control
+def SM1A_TUR_GOV_AVR_PSS_PFQdV(x,*args): #{{{1
+	Ig, genData = args
+	Iq, Id = np.real(Ig), np.imag(Ig)
+	
+	Elq = x[0]
+	Eld = np.imag(genData.el0)
+	omega = x[1]
+	delta = x[2]
+	pm = x[3]
+	pPm = x[4]
+	vAVR = x[5]
+	vWash = x[6]
+	vPSS = x[7]
+	Vt0 = x[8]	
+
+	H = genData.H
+	D = genData.D
+	r = genData.ra
+	EFD0 = genData.efd0
+	tPdo = genData.tPdo
+	xPd = genData.xPd
+	xPq = genData.xPq
+	xd = genData.xd
+	tG = genData.tG
+	tT = genData.tT
+
+	KPss = genData.KPss
+	Ke = genData.Ke
+	Te = genData.Te
+	
+	Vq = Elq - r*Iq + xPd*Id
+	Vd = Eld - r*Id - xPq*Iq
+	Vt = np.sqrt(Vq**2 + Vd**2)
+
+	# Droop equations
+	P = Vq*Iq + Vd*Id
+	Q = Vd*Iq - Vq*Id
+	pmSet = genData.P0 - genData.kP * omega
+
+	#print('\n >>> Gen \'{}\' passed EL = {}'.format(genData.busName, Elq + 1j*Eld))
+	#print(' >>> Gen \'{}\' passed I = {}'.format(genData.busName, Iq + 1j*Id))
+	#print(' >>> Gen \'{}\' model Vt = {}'.format(genData.busName,Vq + 1j*Vd))
+	#print(' >>> Gen \'{}\' model Vt0 = {}'.format(genData.busName,Vt0))
+
+	Tw = genData.Tw
+	T1 = genData.T1
+	T2 = genData.T2
+
+	EFD = EFD0 + vAVR + vPSS
+
+	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
+	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
+	ddelta  = omega
+	dpm = pPm
+	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
+	dvAVR = -(Ke*(Vt - Vt0) + vAVR)/Te
+
+	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
+
+	dvWash = KPss*domega - vWash/Tw
+	dvPSS = (T2*dvWash + vWash - vPSS)/T1
+
+	dVt0 = - (Q - genData.Q0)/genData.kQ
+
+	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS, dVt0] #}}}1
 
 # Synchronous machine two-axis (fourth-order) model with turbine, governor, AVR and PSS equations
 def SM2A_TUR_GOV_AVR_PSS(x,*args): #{{{1

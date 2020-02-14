@@ -52,7 +52,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 	Y4 = Y[nGen : nBus , nGen : nBus]
 
 	dYr = Y1 - Y2 @ np.linalg.inv(Y4) @ Y3	# dYr is the equivalent reduced matrix of the disturbed case
-	#print('\n >>> Disturbed equivalent reduced conductance matrix = \n {}\n'.format(dYr))
+	print('\n >>> Disturbed equivalent reduced conductance matrix = \n {}\n'.format(dYr))
 	# Calculating initial voltages and currents in phasor form
 	V0 = [bus.finalVoltage*np.e**(1j*np.pi/180*bus.finalAngle) for bus in rCase.busData[:rCase.nGen]]
 	I0 = Yr @ V0
@@ -108,8 +108,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		
 		print(' >>> EL = {}'.format(EL[k]))
 
-		delta = np.angle(ELq + 1j*ELd)
-		gen.delta0 = delta
+		gen.delta0 = deltaQD[k]
 		gen.omega0 = 0
 		gen.w0 = gen.omega0
 
@@ -117,6 +116,8 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		if gen.modelDepth == 1: pm0 = ELq*Iq
 		gen.pm0 = pm0
 		gen.P0 = pm0
+
+		gen.kP = gen.ratedPower/1000
 
 		#print(' >>> PM0 = {}'.format(pm0))
 
@@ -155,42 +156,6 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 	#DIFF = [EL[k] - Vmachine[k] - case.genData[k].ra*Imachine[k] + case.genData[k].xPd*np.imag(Imachine[k]) - 1j*case.genData[k].xPq*np.real(Imachine[k]) for k in range(nGen)]
 	#print(DIFF)	
 
-	def solveCurrents(y, *args):
-		Y, EL, angles, case = args
-		#print('\n >>> Passed angleReferences = {}'.format(angles))
-		#print(' >>> Passed EL = {}'.format(EL))
-
-		nGen  = case.nGen
-	
-		F = np.zeros(2*nGen, dtype = float)
-		V = [y[k] + 1j*y[k + nGen] for k in range(nGen)]
-
-		I = Y @ V
-		#print(I)
-		for k in range(case.nGen):
-			# I and V are the current and voltage vectors in the synchronous reference
-			gen = rCase.genData[k]
-			ELq = np.real(EL[k])
-			ELd = np.imag(EL[k])
-		
-			Imachine = I[k]*np.e**(-1j*angles[k])
-			Vmachine = V[k]*np.e**(-1j*angles[k])
-
-			#print(' >>> Imachine = {}'.format(Imachine))
-			Iq = np.real(Imachine)
-			Id = np.imag(Imachine)
-
-			Vq = np.real(Vmachine)
-			Vd = np.imag(Vmachine)
-			#print(Vq + 1j*Vd)
-			
-			F[k] = Vq - ELq + gen.ra*Iq - gen.xPd*Id
-			F[k + nGen] = Vd - ELd + gen.ra*Id + gen.xPq*Iq
-			
-		#print('>>> Calculated F function norm = {}\n'.format(F))
-		#input()
-		return F
-
 	print(' >>> solveCurrents initial value = {}'.format(solveCurrents([np.real(x) for x in V0] + [np.imag(x) for x in V0], Yr, EL, deltaQD, rCase)))
 
 	F0 = [np.real(x) for x in VM] + [np.imag(x) for x in VM]
@@ -207,13 +172,15 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 
 	print('\n >>> Initial solveCurrents solution: V = {}'.format(V))
 	print('\n >>> Powerflow calculated solution V = {}\n'.format(V0))
-	def dynamicFunction(x,t):
+	def dynamicFunction(x,t, *args):
+		Yr, dYr = args
 		if t > tFinal: pbar.update(tFinal)
 		else: pbar.update(t)
 		F = []
 		targetCase = rCase
-		Yt = Yr
+
 		if t > disturbanceTime: Yt = dYr
+		else: Yt = Yr
 
 		EL = np.ones(targetCase.nGen, dtype = complex)
 		angleReferences = np.zeros(targetCase.nGen)
@@ -222,19 +189,19 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			k = rCase.getBusNumber(gen.busName)
 			if gen.modelDepth == 1:
 				EL[k] = np.real(elq0) + 1j*0
-				angleReferences[k] = deltaQD[k]
+				angleReferences[k] = x[i+1]
 				i += 2
 			elif gen.modelDepth == 2:
 				EL[k] = (x[i] + 1j*np.imag(gen.el0))#*np.exp(1j*(deltaQD[k] + x[i+2]))
-				angleReferences[k] = deltaQD[k]
+				angleReferences[k] = x[i+2]
 				i += 3
 			elif gen.modelDepth == 3:
 				EL[k] = x[i] + 1j*np.imag(gen.el0)
-				angleReferences[k] = deltaQD[k]
+				angleReferences[k] = x[i+2]
 				i += 5
 			elif gen.modelDepth in [4,5]:
 				EL[k] = x[i] + 1j*np.imag(gen.el0)
-				angleReferences[k] = deltaQD[k]
+				angleReferences[k] = x[i+2]
 				i += 8
 
 		F0 = [1]*(nGen) + [0]*(nGen)
@@ -280,11 +247,12 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 
 	print(' --> Integrating differential equations... ')
 	pbar = progressbar.ProgressBar(max_value=tFinal)
-	y = odeint(dynamicFunction,x0,tspan)
+	y = odeint(dynamicFunction,x0,tspan, args = (Yr, dYr))
 	pbar.finish()
 	fig1, (ax1, ax2) = pyplot.subplots(1,2)
 	fig2, (ax3, ax4) = pyplot.subplots(1,2)
 	fig3, (ax5, ax6) = pyplot.subplots(1,2)
+	fig4, (ax7, ax8) = pyplot.subplots(1,2)
 
 	i = 0
 	for gen in rCase.genData:
@@ -300,7 +268,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax1.plot(tspan,y[:,i+1], label = gen.busName)
 			ax2.plot(tspan,y[:,i+2], label = gen.busName)
 			i += 5
-		if gen.modelDepth in [4,5]:
+		if gen.modelDepth == 4:
 			ax1.plot(tspan,y[:,i+1], label = gen.busName)
 			ax2.plot(tspan,y[:,i+2], label = gen.busName)
 			EFD = [gen.efd0 + y[k,i+5] + y[k,i+6] for k in range(len(tspan))] 
@@ -308,6 +276,18 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax4.plot(tspan,EFD, label = gen.busName)
 			ax5.plot(tspan, y[:,i+5], label = gen.busName)
 			ax6.plot(tspan, y[:,i+7], label = gen.busName)
+			i += 8
+		if gen.modelDepth == 5:
+			ax1.plot(tspan,y[:,i+1], label = gen.busName)
+			ax2.plot(tspan,y[:,i+2], label = gen.busName)
+			EFD = [gen.efd0 + y[k,i+5] + y[k,i+6] for k in range(len(tspan))] 
+			ax3.plot(tspan,y[:,i], label = gen.busName) 
+			ax4.plot(tspan,EFD, label = gen.busName)
+			ax5.plot(tspan, y[:,i+5], label = gen.busName)
+			ax6.plot(tspan, y[:,i+7], label = gen.busName)
+			pmSet = [gen.P0 - gen.kP * y[k, i+1] for k in range(len(tspan))]
+			ax7.plot(tspan, pmSet, linestyle ='dashed', label = gen.busName) 
+			ax7.plot(tspan, y[:, i+3], label = gen.busName) 
 			i += 8
 
 	ax1.set_ylabel(r'Speed $\omega$')
@@ -334,5 +314,11 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 
 	ax6.legend()
 	ax6.grid(True)
+
+	ax7.legend()
+	ax7.grid(True)
+
+	ax8.legend()
+	ax8.grid(True)
 
 	pyplot.show()
