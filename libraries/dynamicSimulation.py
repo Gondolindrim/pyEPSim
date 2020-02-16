@@ -117,7 +117,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		gen.pm0 = pm0
 		gen.P0 = pm0
 
-		gen.kP = gen.ratedPower/1000
+		gen.kP = gen.ratedPower/50
 
 		#print(' >>> PM0 = {}'.format(pm0))
 
@@ -242,20 +242,68 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		#print(' >>> Dynamic simulation function: t = {}, F = {}, angleReference = {}'.format(t, F, angleReferences))
 		#input()
 		return F
-
 	tspan = np.linspace(0,tFinal,10001)
 
 	print(' --> Integrating differential equations... ')
 	pbar = progressbar.ProgressBar(max_value=tFinal)
 	y = odeint(dynamicFunction,x0,tspan, args = (Yr, dYr))
 	pbar.finish()
-	fig1, (ax1, ax2) = pyplot.subplots(1,2)
-	fig2, (ax3, ax4) = pyplot.subplots(1,2)
-	fig3, (ax5, ax6) = pyplot.subplots(1,2)
-	fig4, (ax7, ax8) = pyplot.subplots(1,2)
+
+	# Processing results
+	print(' >>> Simulation done. Processing results...\n')
+	i = 0
+	EL = np.zeros((rCase.nGen, len(tspan)), dtype = complex)
+	angleReferences = copy(EL)
+	for gen in rCase.genData:
+		k = rCase.getBusNumber(gen.busName)
+		if gen.modelDepth == 1:
+			EL[k] = [np.real(elq0) + 1j*0]*len(tspan)
+			angleReferences[k] = y[:,i+1]
+			i += 2
+		elif gen.modelDepth == 2:
+			EL[k] = (y[:,i] + 1j*np.imag(gen.el0))#*np.exp(1j*(deltaQD[k] + x[i+2]))
+			angleReferences[k] = y[:,i+2]
+			i += 3
+		elif gen.modelDepth == 3:
+			EL[k] = y[:,i] + 1j*np.imag(gen.el0)
+			angleReferences[k] = y[:,i+2]
+			i += 5
+		elif gen.modelDepth in [4,5]:
+			EL[k] = [y[m,i] + 1j*np.imag(gen.el0) for m in range(len(tspan))]
+			angleReferences[k] = y[:,i+2]
+			i += 8
+
+	V = copy(EL)
+	I = copy(EL)
+	P = copy(EL)
+	Q = copy(EL)
+	vRef = copy(EL)
+	for i in range(len(tspan)):
+		if tspan[i] > disturbanceTime: Yt = dYr
+		else: Yt = Yr
+		F0 = [1]*(nGen) + [0]*(nGen)
+		sol = fsolve(solveCurrents,F0, args = (Yt, EL[:,i], angleReferences[:,i], rCase))
+		V[:,i] = [ sol[k] + 1j*sol[k + nGen] for k in range(nGen)]
+		I[:,i] = Yt @ V[:,i]
+
+		V[:,i] = [V[k,i]*np.e**(-1j*angleReferences[k,i]) for k in range(nGen)]
+		I[:,i] = [I[k,i]*np.e**(-1j*angleReferences[k,i]) for k in range(nGen)]
+		P[:,i] = [np.real(V[k,i])*np.real(I[k,i]) + np.imag(V[k,i])*np.imag(I[k,i]) for k in range(nGen)]
+		Q[:,i] = [np.imag(V[k,i])*np.real(I[k,i]) - np.real(V[k,i])*np.imag(I[k,i]) for k in range(nGen)]
+
+		for m in range(nGen):
+			gen = rCase.genData[k]
+			if gen.modelDepth in [1, 2, 3, 4]: vRef[m,i] = gen.vRef
+			elif gen.modelDepth == 5: vRef[k,i] = rCase.genData[k].vRef - (Q[k,i] - rCase.genData[k].Q0)/rCase.genData[k].kQ
+
+	fig1, (ax1,ax2) = pyplot.subplots(1,2)
+	fig2, (ax3,ax4) = pyplot.subplots(1,2)
+	fig3, (ax5,ax6) = pyplot.subplots(1,2)
+	fig4, (ax7,ax8) = pyplot.subplots(1,2)
 
 	i = 0
 	for gen in rCase.genData:
+		k = rCase.getBusNumber(gen.busName)
 		if gen.modelDepth == 1:
 			ax1.plot(tspan,y[:,i], label = gen.busName)
 			ax2.plot(tspan,y[:,i+1], label = gen.busName)
@@ -278,24 +326,34 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax6.plot(tspan, y[:,i+7], label = gen.busName)
 			i += 8
 		if gen.modelDepth == 5:
-			ax1.plot(tspan,y[:,i+1], label = gen.busName)
-			ax2.plot(tspan,y[:,i+2], label = gen.busName)
 			EFD = [gen.efd0 + y[k,i+5] + y[k,i+6] for k in range(len(tspan))] 
+			pmSet = [gen.P0 - gen.kP * y[k, i+1] for k in range(len(tspan))]
+			ax1.plot(tspan,y[:,i+1], label = gen.busName)
+
+			p = ax2.plot(tspan,pmSet, label = gen.busName)
+			ax2.plot(tspan, y[:, i+3], linestyle = 'dashed', label = gen.busName, color = p[0].get_color())
+
 			ax3.plot(tspan,y[:,i], label = gen.busName) 
 			ax4.plot(tspan,EFD, label = gen.busName)
 			ax5.plot(tspan, y[:,i+5], label = gen.busName)
 			ax6.plot(tspan, y[:,i+7], label = gen.busName)
-			pmSet = [gen.P0 - gen.kP * y[k, i+1] for k in range(len(tspan))]
-			ax7.plot(tspan, pmSet, linestyle ='dashed', label = gen.busName) 
-			ax7.plot(tspan, y[:, i+3], label = gen.busName) 
+			
+			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
+			ax7.plot(tspan, vRef[k,:], linestyle ='dashed', label = gen.busName, color = q[0].get_color()) 
+
+			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
+			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', label = gen.busName, color = q[0].get_color()) 
+
 			i += 8
 
 	ax1.set_ylabel(r'Speed $\omega$')
-	ax2.set_ylabel(r'Angle deviation $\delta$')
+	ax2.set_ylabel(r'Mechanical power $P_m$')
 	ax3.set_ylabel(r'Induced voltage $E^\prime_q$')
 	ax4.set_ylabel(r'Field voltage $E_{FD}$')
 	ax5.set_ylabel(r'AVR voltage $V_{AVR}$')
 	ax6.set_ylabel(r'PSS voltage $V_{PSS}$')
+	ax7.set_ylabel(r'Reference voltage')
+	ax8.set_ylabel(r'Output reactive power $Q$')
 
 	ax1.legend()
 	ax1.grid(True)
@@ -320,5 +378,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 
 	ax8.legend()
 	ax8.grid(True)
+
+	print(' >>> Results processed. Plotting...\n')
 
 	pyplot.show()

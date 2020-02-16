@@ -160,7 +160,8 @@ def loadCase(fileName,**kwargs):
 				# If the parameters of the generator were given in relation with the generator PU system, they should be converted to the system's PU
 				if genDataPUReference == 'GENERATOR' or genDataPUReference == 'generator':
 					m = (newGen.ratedVoltage**2/newGen.ratedPower)/(Vb**2/Sb)
-					newGen.H *= m
+					n = newGen.ratedPower/Sb
+					newGen.H *= n
 					newGen.ra *= m
 					newGen.xL *= m
 					newGen.xd *= m

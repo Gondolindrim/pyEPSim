@@ -223,7 +223,7 @@ def SM1A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	P = Vq*Iq + Vd*Id
 	Q = Vd*Iq - Vq*Id
 	pmSet = genData.P0 - genData.kP * omega
-	Vt0 = genData.V0 - (Q - genData.Q0)/genData.kQ
+	Vt0 = genData.vRef - (Q - genData.Q0)/genData.kQ
 
 	#print('\n >>> Gen \'{}\' passed EL = {}'.format(genData.busName, Elq + 1j*Eld))
 	#print(' >>> Gen \'{}\' passed I = {}'.format(genData.busName, Iq + 1j*Id))
