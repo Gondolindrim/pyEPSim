@@ -100,5 +100,5 @@ print(' ---> TEST 4: calculating norm(IC - I) = {}'.format(np.linalg.norm(IC - I
 print(' ---> I = {}'.format(I))
 
 # TEST (5): dynamic simulation
-disturbanceData = ['Bus 001', 200 + 1j*30, 1]
-dS(case, disturbanceData, 60)
+disturbanceData = ['Bus 001', 100 + 1j*10, 1]
+dS(case, disturbanceData, 150)
