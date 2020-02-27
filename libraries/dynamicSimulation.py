@@ -131,15 +131,19 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		#print(' >>> VRef = {}, V0 = {}'.format(gen.vRef, np.abs(V0[k])))
 
 		gen.Q0 = Vd*Iq - Vq*Id
-		gen.kQ = 1
+		gen.kQ = 0.1*gen.ratedPower
+		gen.kReg = 0.01
 
 		if gen.modelDepth == 1:	x0.extend([gen.omega0,gen.delta0])
 		if gen.modelDepth == 2: x0.extend([ELq, gen.omega0, gen.delta0])
 		if gen.modelDepth == 3:	x0.extend([ELq, gen.omega0, gen.delta0, pm0, 0])
 		if gen.modelDepth in [4,5]: x0.extend([ELq, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0])
 		if gen.modelDepth == 6: x0.extend([ELq, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0, gen.vRef])
-		if gen.modelDepth == 8:	x0.extend([ELq, ELd, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0])
-		if gen.modelDepth == 9:	x0.extend([ELq, ELd, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0, gen.vRef])
+		if gen.modelDepth in [7,8]: x0.extend([ELq, ELd, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0])
+		if gen.modelDepth == 9:	x0.extend([ELq, ELd, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0, gen.vRef, gen.Q0])
+		if gen.modelDepth == 10: x0.extend([ELq, ELd, gen.omega0, gen.delta0, pm0, 0])
+		if gen.modelDepth == 11: x0.extend([ELq, ELd, gen.omega0, gen.delta0, pm0, 0, gen.vAVR0, gen.vWash0, gen.vPSS0, gen.vRef, gen.Q0, gen.P0])
+
 
 	#print(' >>> Induced voltages at initial point = {}\n'.format(EL))
 	#print(' >>> deltaQD at initial point = {}\n'.format(deltaQD))
@@ -205,14 +209,22 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 				EL[k] = x[i] + 1j*np.imag(gen.el0)
 				angleReferences[k] = x[i+2]
 				i += 9
-			elif gen.modelDepth == 8:
+			elif gen.modelDepth in [7,8]:
 				EL[k] = x[i] + 1j*x[i+1]
 				angleReferences[k] = x[i+3]
 				i += 9
 			elif gen.modelDepth == 9:
 				EL[k] = x[i] + 1j*x[i+1]
 				angleReferences[k] = x[i+3]
-				i += 10
+				i += 11
+			elif gen.modelDepth == 10:
+				EL[k] = x[i] + 1j*x[i+1]
+				angleReferences[k] = x[i+3]
+				i += 6
+			elif gen.modelDepth == 11:
+				EL[k] = x[i] + 1j*x[i+1]
+				angleReferences[k] = x[i+3]
+				i += 12
 
 		F0 = [1]*(nGen) + [0]*(nGen)
 	
@@ -245,12 +257,21 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			elif gen.modelDepth == 6:
 				F.extend(SM1A_TUR_GOV_AVR_PSS_PFQdV([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7], x[i+8]], Iq + 1j*Id, gen))
 				i += 9
+			elif gen.modelDepth == 7:
+				F.extend(SM2A_TUR_GOV_AVR_PSS([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7], x[i+8]], Iq + 1j*Id, gen))
+				i += 9
 			elif gen.modelDepth == 8:
 				F.extend(SM2A_TUR_GOV_AVR_PSS_PFQV([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7], x[i+8]], Iq + 1j*Id, gen))
 				i += 9
 			elif gen.modelDepth == 9:
-				F.extend(SM2A_TUR_GOV_AVR_PSS_PFQdV([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7], x[i+8], x[i+9]], Iq + 1j*Id, gen))
-				i += 10
+				F.extend(SM2A_TUR_GOV_AVR_PSS_PFQdV([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7], x[i+8], x[i+9], x[i+10]], Iq + 1j*Id, gen))
+				i += 11
+			elif gen.modelDepth == 10:
+				F.extend(SM2A_TUR_GOV([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5]], Iq + 1j*Id, gen))
+				i += 6
+			elif gen.modelDepth == 11:
+				F.extend(SM2A_TUR_GOV_AVR_PSS_iPFQdV([x[i], x[i+1], x[i+2], x[i+3], x[i+4], x[i+5], x[i+6], x[i+7], x[i+8], x[i+9], x[i+10], x[i+11]], Iq + 1j*Id, gen))
+				i += 12
 
 		#print(' >>> Induced voltages calculated at time {} = {}'.format(t, EL))	
 		#print(' >>> Current / voltage difference at time {} = {}'.format(t, np.linalg.norm(I - Yt @ V)))
@@ -297,15 +318,22 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			EL[k] = [y[m,i] + 1j*np.imag(gen.el0) for m in range(len(tspan))]
 			angleReferences[k] = y[:,i+2]
 			i += 9
-
-		elif gen.modelDepth == 8:
+		elif gen.modelDepth in [7,8]:
 			EL[k] = [y[m,i] + 1j*y[m,i+1] for m in range(len(tspan))]
 			angleReferences[k] = y[:,i+3]
 			i += 9
 		elif gen.modelDepth == 9:
 			EL[k] = [y[m,i] + 1j*y[m,i+1] for m in range(len(tspan))]
 			angleReferences[k] = y[:,i+3]
-			i += 10
+			i += 11
+		elif gen.modelDepth == 10:
+			EL[k] = y[:,i] + 1j*y[:,i+1]
+			angleReferences[k] = y[:,i+2]
+			i += 6
+		elif gen.modelDepth == 11:
+			EL[k] = [y[m,i] + 1j*y[m,i+1] for m in range(len(tspan))]
+			angleReferences[k] = y[:,i+3]
+			i += 12
 
 	print('  >> Calculating currents, voltages and output power...')
 	V = copy(EL)
@@ -345,9 +373,16 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		elif gen.modelDepth == 5:
 			vRef[m,:] = [gen.vRef - (Q[m,t] - gen.Q0)/gen.kQ for t in range(len(tspan))]
 			i += 8
+		elif gen.modelDepth == 7:
+			vRef[m,:] = gen.vRef
+			i += 9
 		elif gen.modelDepth == 8:
 			vRef[m,:] = [gen.vRef - (Q[m,t] - gen.Q0)/gen.kQ for t in range(len(tspan))]
 			i += 9
+		elif gen.modelDepth == 10:
+			vRef[m,:] = [gen.vRef]*len(tspan)
+			i += 6
+
 
 	print('  >> Plotting results...')
 
@@ -445,6 +480,29 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color()) 
 
 			i += 9
+		if gen.modelDepth == 7:
+			EFD = [gen.efd0 + y[k,i+6] + y[k,i+8] for k in range(len(tspan))] 
+			pmSet = [gen.P0 for k in range(len(tspan))]
+			ax1.plot(tspan,y[:,i+2], label = gen.busName)
+
+			q = ax2.plot(tspan, pmSet, linestyle = 'dashed', label = gen.busName)
+			ax2.plot(tspan, y[:, i+4], label = gen.busName, color = q[0].get_color())
+
+			q = ax3.plot(tspan,y[:,i], label = gen.busName) 
+			ax3.plot(tspan,y[:,i+1], linestyle = 'dashed', color = q[0].get_color(), label = gen.busName) 
+
+			ax4.plot(tspan,EFD, label = gen.busName)
+			ax5.plot(tspan, y[:,i+6], label = gen.busName)
+			ax6.plot(tspan, y[:,i+8], label = gen.busName)
+			
+			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
+			ax7.plot(tspan, vRef[k,:], linestyle ='dashed', color = q[0].get_color()) 
+
+			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
+			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color()) 
+
+			i += 9
+
 		if gen.modelDepth == 9:
 			EFD = [gen.efd0 + y[k,i+6] + y[k,i+8] for k in range(len(tspan))] 
 			pmSet = [gen.P0 - gen.kP * y[k, i+2] for k in range(len(tspan))]
@@ -464,9 +522,53 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax7.plot(tspan, y[:,i+9], linestyle ='dashed', color = q[0].get_color()) 
 
 			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
+			ax8.plot(tspan, y[:,i+10], linestyle ='dashed', color = q[0].get_color()) 
+
+			i += 11
+		if gen.modelDepth == 10:
+			EFD = [gen.efd0 for k in range(len(tspan))] 
+			pmSet = [gen.pm0 for k in range(len(tspan))]
+			ax1.plot(tspan,y[:,i+2], label = gen.busName)
+
+			q = ax2.plot(tspan, pmSet, linestyle = 'dashed', label = gen.busName)
+			ax2.plot(tspan, y[:, i+4], label = gen.busName, color = q[0].get_color())
+
+			q = ax3.plot(tspan,y[:,i], label = gen.busName) 
+			ax3.plot(tspan,y[:,i+1], linestyle = 'dashed', color = q[0].get_color(), label = gen.busName) 
+
+			ax4.plot(tspan,EFD, label = gen.busName)
+			ax5.plot(tspan, [0 for k in range(len(tspan))], label = gen.busName)
+			ax6.plot(tspan, [0 for k in range(len(tspan))], label = gen.busName)
+			
+			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
+			ax7.plot(tspan, [gen.vRef for k in range(len(tspan))], linestyle ='dashed', color = q[0].get_color()) 
+
+			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
 			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color()) 
 
-			i += 10
+			i += 6
+		if gen.modelDepth == 11:
+			EFD = [gen.efd0 + y[k,i+6] + y[k,i+8] for k in range(len(tspan))] 
+			pmSet = y[:,i+11] - gen.kP * y[:,i+2]
+			ax1.plot(tspan,y[:,i+2], label = gen.busName)
+
+			q = ax2.plot(tspan, pmSet, linestyle = 'dashed', label = gen.busName)
+			ax2.plot(tspan, y[:, i+4], label = gen.busName, color = q[0].get_color())
+
+			q = ax3.plot(tspan,y[:,i], label = gen.busName) 
+			ax3.plot(tspan,y[:,i+1], linestyle = 'dashed', color = q[0].get_color(), label = gen.busName) 
+
+			ax4.plot(tspan,EFD, label = gen.busName)
+			ax5.plot(tspan, y[:,i+6], label = gen.busName)
+			ax6.plot(tspan, y[:,i+8], label = gen.busName)
+			
+			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
+			ax7.plot(tspan, y[:,i+9], linestyle ='dashed', color = q[0].get_color()) 
+
+			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
+			ax8.plot(tspan, y[:,i+10], linestyle ='dashed', color = q[0].get_color()) 
+
+			i += 12
 
 	ax1.set_ylabel(r'Speed $\omega$')
 	ax2.set_ylabel(r'Mechanical power $P_m$')

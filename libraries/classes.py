@@ -400,6 +400,7 @@ class generator:
 		self.Q0 = 0
 		self.w0 = 0
 		self.V0 = 0
+		self.kReg = 0.01
 
 	def __str__(self):
 		tableformat = 'psql' 
