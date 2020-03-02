@@ -615,6 +615,5 @@ def SM2A_TUR_GOV_AVR_PSS_iPFQdV(x,*args): #{{{1
 
 	dVt0 =  -(Q - Q0)/genData.kQ
 	dQ0 = - genData.kReg*genData.ratedPower*(dVt0)
-	dP0 = - 5*genData.kReg*(omega)
+	dP0 = - genData.ratedPower*genData.kReg*(omega)
 	return [dElq, dEld, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS, dVt0, dQ0, dP0] #}}}1
-

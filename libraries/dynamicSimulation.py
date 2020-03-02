@@ -42,16 +42,25 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 	targetBusN = rCase.getBusNumber(targetBus)
 
 	# Building Y matrix with new load
-	dYL = np.diag([ (np.real(disturbanceAmplitude)  - 1j*np.imag(disturbanceAmplitude))/rCase.busData[targetBusN].finalVoltage**2 if k == targetBusN else 0 for k in range(rCase.nBus)])/rCase.Sb
-	Y = copy(rCase.Y)
-	Y += dYL
+	print('\n\n\n\n\n\n {} \n\n\n\n\n'.format(np.diag([ (np.real(disturbanceAmplitude)  - 1j*np.imag(disturbanceAmplitude))/rCase.busData[targetBusN].finalVoltage**2 if k == targetBusN else 0 for k in range(rCase.nBus)])/rCase.Sb))
 
-	Y1 = Y[0 : nGen, 0 : nGen]
-	Y2 = Y[0 : nGen , nGen : nBus]
-	Y3 = Y[nGen : nBus , 0 : nGen]
-	Y4 = Y[nGen : nBus , nGen : nBus]
+	# Building 'disturbed case'
+	dCase = copy(case)
+	dCase.name = 'Disturbed ' + dCase.name
+	dCase.busData[targetBusN].pLoad += np.real(disturbanceAmplitude)
+	dCase.busData[targetBusN].qLoad += np.imag(disturbanceAmplitude)
 
-	dYr = Y1 - Y2 @ np.linalg.inv(Y4) @ Y3	# dYr is the equivalent reduced matrix of the disturbed case
+	dYr, rdCase = dCase.reduceMatrixes()
+
+#	Y = copy(rCase.Y)
+#	Y += dYL
+#
+#	Y1 = Y[0 : nGen, 0 : nGen]
+#	Y2 = Y[0 : nGen , nGen : nBus]
+#	Y3 = Y[nGen : nBus , 0 : nGen]
+#	Y4 = Y[nGen : nBus , nGen : nBus]
+#
+#	dYr = Y1 - Y2 @ np.linalg.inv(Y4) @ Y3	# dYr is the equivalent reduced matrix of the disturbed case
 	print('\n >>> Disturbed equivalent reduced conductance matrix = \n {}\n'.format(dYr))
 	# Calculating initial voltages and currents in phasor form
 	V0 = [bus.finalVoltage*np.e**(1j*np.pi/180*bus.finalAngle) for bus in rCase.busData[:rCase.nGen]]
@@ -117,7 +126,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		gen.pm0 = pm0
 		gen.P0 = pm0
 
-		gen.kP = gen.ratedPower/50
+		gen.kP = gen.ratedPower/20
 
 		#print(' >>> PM0 = {}'.format(pm0))
 
@@ -125,14 +134,13 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		gen.efd0 = EFD0
 		#print(' >>> EFD0 = {}'.format(EFD0))
 
-		gen.vAVR0 = gen.Ke*(np.abs(V0[k]) - gen.vRef)
-		dvAVR = (gen.Ke*(np.abs(V0[k]) - gen.vRef) - gen.vAVR0)/gen.Te
+		gen.vAVR0 = -gen.Ke*(np.abs(V0[k]) - gen.vRef)
 		#print(' >>> dvAVR = {}'.format(dvAVR))
 		#print(' >>> VRef = {}, V0 = {}'.format(gen.vRef, np.abs(V0[k])))
 
 		gen.Q0 = Vd*Iq - Vq*Id
 		gen.kQ = 0.1*gen.ratedPower
-		gen.kReg = 0.01
+		gen.kReg = 0.005
 
 		if gen.modelDepth == 1:	x0.extend([gen.omega0,gen.delta0])
 		if gen.modelDepth == 2: x0.extend([ELq, gen.omega0, gen.delta0])
@@ -180,9 +188,10 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 		else: pbar.update(t)
 		F = []
 		targetCase = rCase
-
-		if t > disturbanceTime: Yt = dYr
-		else: Yt = Yr
+		Yt = Yr
+		if t > disturbanceTime:
+			Yt = dYr
+			targetCase = rdCase
 
 		EL = np.ones(targetCase.nGen, dtype = complex)
 		angleReferences = np.zeros(targetCase.nGen)
@@ -228,7 +237,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 
 		F0 = [1]*(nGen) + [0]*(nGen)
 	
-		sol = fsolve(solveCurrents,F0, args = (Yt, EL, angleReferences, rCase))
+		sol = fsolve(solveCurrents,F0, args = (Yt, EL, angleReferences, targetCase))
 		V = [ sol[k] + 1j*sol[k + nGen] for k in range(nGen)]
 		I = Yt @ V
 

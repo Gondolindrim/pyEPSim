@@ -202,26 +202,28 @@ class case:
 		# Building component matrixes
 		nGen, nBus = self.nGen, self.nBus
 		success = self.runPowerFlow()
+		#print('-'*50 + '\n REDUCING CASE {}\n'.format(self.name) + '-'*50 + '\n')
+
+		# Checking if power flow is successful
+		if not success: raise Exception(' Case \'{}\' matrix reduction not possible because the power flow calculations returned not successful'.format(self.name))
 		rCase = copy(self)
 		rCase.name = 'Reduced ' + self.name
-		if not success: raise Exception(' Case \'{}\' matrix reduction not possible because the power flow calculations returned not successful'.format(self.name))
-		
+
+		# Moving generator buses to the top positions
 		for i in range(nBus):
 			for j in range(i+1, nBus):
 				if rCase.isGen(rCase.busData[j].name) and not rCase.isGen(rCase.busData[i].name):
 					rCase = rCase.swapBuses(rCase.busData[i].name, rCase.busData[j].name)
 
 		YL = np.diag([ (rCase.busData[k].pLoad  - 1j*rCase.busData[k].qLoad)/rCase.busData[k].finalVoltage**2 for k in range(rCase.nBus)])/rCase.Sb
-		Y = copy(rCase.Y)
-		Y += YL
-
+		print(YL)
 		for k in range(rCase.nBus):
-			bus = rCase.busData[k]
-			bus.pLoad, bus.qLoad = 0, 0
-			bus.gsh += np.real(YL[k, k])
-			bus.bsh += np.imag(YL[k, k])
+			rCase.busData[k].pLoad, rCase.busData[k].qLoad = 0, 0
+			rCase.busData[k].gsh += np.real(YL[k, k])
+			rCase.busData[k].bsh += np.imag(YL[k, k])
 
 		rCase.updateMatrixes()
+		Y = copy(rCase.Y)
 
 		Y1 = Y[0 : nGen, 0 : nGen]
 		Y2 = Y[0 : nGen , nGen : nBus]
