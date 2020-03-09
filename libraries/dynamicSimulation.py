@@ -42,7 +42,36 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 	targetBusN = rCase.getBusNumber(targetBus)
 
 	# Building Y matrix with new load
-	print('\n\n\n\n\n\n {} \n\n\n\n\n'.format(np.diag([ (np.real(disturbanceAmplitude)  - 1j*np.imag(disturbanceAmplitude))/rCase.busData[targetBusN].finalVoltage**2 if k == targetBusN else 0 for k in range(rCase.nBus)])/rCase.Sb))
+	#print('\n\n\n\n\n\n {} \n\n\n\n\n'.format(np.diag([ (np.real(disturbanceAmplitude)  - 1j*np.imag(disturbanceAmplitude))/rCase.busData[targetBusN].finalVoltage**2 if k == targetBusN else 0 for k in range(rCase.nBus)])/rCase.Sb))
+
+	# Coupling coefficients matrix
+	print(rCase)
+
+	pinningList = [[0,1,7],[3,2,8],[5,4,6]]
+
+	a = np.zeros((nGen, nGen), dtype = float)
+	for k in range(nGen):
+		gen = rCase.genData[k]
+		for m in range(nGen):
+			for i in range(len(pinningList)):
+				if k != m and k in pinningList[i] and m in pinningList[i]: a[k,m] = gen.H*np.abs(Yr[k,m])
+
+		a[k,k] = -sum(a[k])
+
+	print(' --> Pinning coefficients matrix:\n{}'.format(a))
+
+	kb = 1e5
+	b0 = kb/100	# Generator at bus 0
+	b3 = kb/72.5	# Generator at bus 6
+	b5 = kb/52.5	# Generator at bus 9
+	b = np.array([[b0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,b3,0,0],[0,0,0,0,0,0],[0,0,0,0,0,b5]])
+
+	print(' --> Pinning gains matrix:\n{}'.format(b))
+
+	print(' --> a - b matrix:\n{}'.format(a-b))
+
+	print(' --> EIGENVALUES: {}'.format(np.linalg.eigvals(a-b)))
+ 
 
 	# Building 'disturbed case'
 	dCase = copy(case)
@@ -61,20 +90,20 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 #	Y4 = Y[nGen : nBus , nGen : nBus]
 #
 #	dYr = Y1 - Y2 @ np.linalg.inv(Y4) @ Y3	# dYr is the equivalent reduced matrix of the disturbed case
-	print('\n >>> Disturbed equivalent reduced conductance matrix = \n {}\n'.format(dYr))
+	#print('\n >>> Disturbed equivalent reduced conductance matrix = \n {}\n'.format(dYr))
 	# Calculating initial voltages and currents in phasor form
 	V0 = [bus.finalVoltage*np.e**(1j*np.pi/180*bus.finalAngle) for bus in rCase.busData[:rCase.nGen]]
 	I0 = Yr @ V0
-	print(' >>> Voltages as obtained through power flow: {}'.format(V0))
-	print(' >>> Currents as obtained through power flow: {}'.format(I0))
+	#print(' >>> Voltages as obtained through power flow: {}'.format(V0))
+	#print(' >>> Currents as obtained through power flow: {}'.format(I0))
 
 	# deltaQD stores the angles of each machine QD axis in reference to the systems synchronous axis
 	EQD = [V0[k] + (rCase.genData[k].ra + 1j*rCase.genData[k].xq)*I0[k] for k in range(rCase.nGen)]
 	deltaQD = [ np.angle(x) for x in EQD]
 	voltageAngles = [np.pi*bus.finalAngle/180 for bus in rCase.busData[:rCase.nGen]]
-	print(' >>> Voltages calculated at initial time = {}'.format(V0))
-	print(' >>> Currents calculated at initial time = {}'.format(I0))
-	print(' >>> Axis references calculated at initial time = {}'.format(deltaQD))
+	#print(' >>> Voltages calculated at initial time = {}'.format(V0))
+	#print(' >>> Currents calculated at initial time = {}'.format(I0))
+	#print(' >>> Axis references calculated at initial time = {}'.format(deltaQD))
 
 	x0 = []
 	# Calculating initial generator conditions

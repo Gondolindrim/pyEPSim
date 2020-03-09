@@ -51,7 +51,7 @@ netFile = args.net
 
 case = lC.loadCase(netFile)
 case.runPowerFlow()
-print(case)
+#print(case)
 #Yred, rCase = case.reduceMatrixes()
 #
 ## TESTING REDUCTION ALGORITHM

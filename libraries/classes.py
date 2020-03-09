@@ -216,7 +216,7 @@ class case:
 					rCase = rCase.swapBuses(rCase.busData[i].name, rCase.busData[j].name)
 
 		YL = np.diag([ (rCase.busData[k].pLoad  - 1j*rCase.busData[k].qLoad)/rCase.busData[k].finalVoltage**2 for k in range(rCase.nBus)])/rCase.Sb
-		print(YL)
+		#print(YL)
 		for k in range(rCase.nBus):
 			rCase.busData[k].pLoad, rCase.busData[k].qLoad = 0, 0
 			rCase.busData[k].gsh += np.real(YL[k, k])
@@ -244,8 +244,8 @@ class case:
 
 		print('\n >> Case \'{0}\' bus list'.format(self.name))
 		tabRows = []
-		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt conductance\ngsh (p.u.)', 'Shunt susceptancee\nbsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
-		for bus in self.busData: tabRows.append([bus.number, bus.name, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.gsh, bus.bsh, bus.finalVoltage, bus.finalAngle])
+		tabHeader = ['Number', 'Name', 'Load Area', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt conductance\ngsh (p.u.)', 'Shunt susceptancee\nbsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
+		for bus in self.busData: tabRows.append([bus.number, bus.name, bus.loadArea, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.gsh, bus.bsh, bus.finalVoltage, bus.finalAngle])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -298,7 +298,7 @@ class case:
 # will be added to the pLoad and qLoad after these are converted to shunt impedances.
 # --> "finalVoltage" and "finalAngle" are the calculated (through power flow or state estimation) voltage and angle of the bus. These parameters are optional key arguments that do not need to be given when the instance is created; in this case, they assume the 1 and 0 values ("flat start"). These values can be changed directly or through the runPowerFlow() method in the case class.
 class bus:
-	def __init__(self,number,name,PVtype,pLoad,qLoad,pGen,qGen,gsh,bsh,finalVoltage = None, finalAngle = None):
+	def __init__(self,number,name,loadArea,PVtype,pLoad,qLoad,pGen,qGen,gsh,bsh,finalVoltage = None, finalAngle = None):
 		self.number = int(number)
 		self.name = str(name)
 		self.PVtype = str(PVtype)
@@ -308,6 +308,8 @@ class bus:
 		self.qGen = float(qGen)
 		self.bsh = float(bsh)
 		self.gsh = float(gsh)
+
+		self.loadArea = int(loadArea)
 
 		self.finalVoltage = 1 if finalVoltage is None else finalVoltage
 		self.finalAngle = 0 if finalAngle is None else finalAngle
