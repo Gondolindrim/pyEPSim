@@ -140,7 +140,7 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 
 		gen.Q0 = Vd*Iq - Vq*Id
 		gen.kQ = 0.1*gen.ratedPower
-		gen.kReg = 0.005
+		gen.kReg = 0.01
 
 		if gen.modelDepth == 1:	x0.extend([gen.omega0,gen.delta0])
 		if gen.modelDepth == 2: x0.extend([ELq, gen.omega0, gen.delta0])
@@ -483,10 +483,10 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax6.plot(tspan, y[:,i+8], label = gen.busName)
 			
 			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
-			ax7.plot(tspan, vRef[k,:], linestyle ='dashed', color = q[0].get_color()) 
+			ax7.plot(tspan, vRef[k,:], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference voltage') 
 
 			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
-			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color()) 
+			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference reactive power') 
 
 			i += 9
 		if gen.modelDepth == 7:
@@ -505,10 +505,10 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax6.plot(tspan, y[:,i+8], label = gen.busName)
 			
 			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
-			ax7.plot(tspan, vRef[k,:], linestyle ='dashed', color = q[0].get_color()) 
+			ax7.plot(tspan, vRef[k,:], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference voltage') 
 
 			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
-			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color()) 
+			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference reactive power') 
 
 			i += 9
 
@@ -528,10 +528,10 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax6.plot(tspan, y[:,i+8], label = gen.busName)
 			
 			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
-			ax7.plot(tspan, y[:,i+9], linestyle ='dashed', color = q[0].get_color()) 
+			ax7.plot(tspan, y[:,i+9], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference voltage') 
 
 			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
-			ax8.plot(tspan, y[:,i+10], linestyle ='dashed', color = q[0].get_color()) 
+			ax8.plot(tspan, y[:,i+10], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference reactive power') 
 
 			i += 11
 		if gen.modelDepth == 10:
@@ -550,10 +550,10 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax6.plot(tspan, [0 for k in range(len(tspan))], label = gen.busName)
 			
 			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
-			ax7.plot(tspan, [gen.vRef for k in range(len(tspan))], linestyle ='dashed', color = q[0].get_color()) 
+			ax7.plot(tspan, [gen.vRef for k in range(len(tspan))], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference voltage') 
 
 			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
-			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color()) 
+			ax8.plot(tspan, [gen.Q0 for m in range(len(tspan))], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference reactive power') 
 
 			i += 6
 		if gen.modelDepth == 11:
@@ -572,10 +572,10 @@ def dynamicSimulation(case, disturbanceData, tFinal):
 			ax6.plot(tspan, y[:,i+8], label = gen.busName)
 			
 			q = ax7.plot(tspan, [np.abs(V[k,m]) for m in range(len(tspan))], label = gen.busName) 
-			ax7.plot(tspan, y[:,i+9], linestyle ='dashed', color = q[0].get_color()) 
+			ax7.plot(tspan, y[:,i+9], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference voltage') 
 
 			q = ax8.plot(tspan, Q[k,:], label = gen.busName) 
-			ax8.plot(tspan, y[:,i+10], linestyle ='dashed', color = q[0].get_color()) 
+			ax8.plot(tspan, y[:,i+10], linestyle ='dashed', color = q[0].get_color(), label = gen.busName + ' reference reactive power') 
 
 			i += 12
 

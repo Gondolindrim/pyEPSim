@@ -50,55 +50,57 @@ verbose = args.verbose
 netFile = args.net
 
 case = lC.loadCase(netFile)
-Yred, rCase = case.reduceMatrixes()
-
-# TESTING REDUCTION ALGORITHM
-
-# TEST (1): rCase and case power flow should be the exact same
-rCase.runPowerFlow()
+case.runPowerFlow()
 print(case)
-print(rCase)
-
-# TEST (2): currents in case should be the same, be it calculated through power flux or conductance matrix
-V = [case.busData[k].finalVoltage for k in range(case.nBus)]
-theta = [np.pi*case.busData[k].finalAngle/180 for k in range(case.nBus)]
-
-P = np.array([bus.pGen for bus in case.busData])/case.Sb
-Q = np.array([bus.qGen for bus in case.busData])/case.Sb
-V = [V[k]*np.e**(1j*theta[k]) for k in range(case.nBus)]
-YL = np.diag([ (case.busData[k].pLoad  - 1j*case.busData[k].qLoad)/case.busData[k].finalVoltage**2 for k in range(case.nBus)])/case.Sb
-Y = copy(case.Y) + YL
-IC = [ np.conj((P[k] + 1j*Q[k])/(V[k])) for k in range(case.nBus)]	# Currents calculated through power flow
-I = Y @ V	# Currents calculated throgh conductance matrix
-print(' ---> TEST 2: calculating norm(IC - I) = {}'.format(np.linalg.norm(IC - I)))
-
-# TEST (3): currents in rcase should be the same, be it calculated through power flux or conductance matrix
-P = np.array([bus.pGen for bus in rCase.busData])/rCase.Sb
-Q = np.array([bus.qGen for bus in rCase.busData])/rCase.Sb
-V = [rCase.busData[k].finalVoltage for k in range(rCase.nBus)]
-theta = [np.pi*rCase.busData[k].finalAngle/180 for k in range(rCase.nBus)]
-V = [V[k]*np.e**(1j*theta[k]) for k in range(rCase.nBus)]
-
-YL = np.diag([ (rCase.busData[k].pLoad  - 1j*rCase.busData[k].qLoad)/rCase.busData[k].finalVoltage**2 for k in range(rCase.nBus)])/rCase.Sb
-Y = copy(rCase.Y) + YL
-IC = [ np.conj((P[k] + 1j*Q[k])/(V[k])) for k in range(rCase.nBus)]
-I = Y @ V
-print(' ---> TEST 3: calculating norm(IC - I) = {}'.format(np.linalg.norm(IC - I)))
-
-# TEST (4): currents in rCase generators should be the same when calculated through power flux or Yred matrix
-P = np.array([bus.pGen for bus in rCase.busData])/rCase.Sb
-Q = np.array([bus.qGen for bus in rCase.busData])/rCase.Sb
-V = [rCase.busData[k].finalVoltage for k in range(rCase.nBus)]
-theta = [np.pi*rCase.busData[k].finalAngle/180 for k in range(rCase.nBus)]
-V = [V[k]*np.e**(1j*theta[k]) for k in range(rCase.nBus)]
-
-YL = np.diag([ (rCase.busData[k].pLoad  - 1j*rCase.busData[k].qLoad)/rCase.busData[k].finalVoltage**2 for k in range(rCase.nBus)])/rCase.Sb
-Y = copy(rCase.Y) + YL
-IC = [ np.conj((P[k] + 1j*Q[k])/(V[k])) for k in range(rCase.nGen)]
-I = Yred @ [V[k] for k in range(rCase.nGen)]
-print(' ---> TEST 4: calculating norm(IC - I) = {}'.format(np.linalg.norm(IC - I)))
-print(' ---> I = {}'.format(I))
-
+#Yred, rCase = case.reduceMatrixes()
+#
+## TESTING REDUCTION ALGORITHM
+#
+## TEST (1): rCase and case power flow should be the exact same
+#rCase.runPowerFlow()
+#print(case)
+#print(rCase)
+#
+## TEST (2): currents in case should be the same, be it calculated through power flux or conductance matrix
+#V = [case.busData[k].finalVoltage for k in range(case.nBus)]
+#theta = [np.pi*case.busData[k].finalAngle/180 for k in range(case.nBus)]
+#
+#P = np.array([bus.pGen for bus in case.busData])/case.Sb
+#Q = np.array([bus.qGen for bus in case.busData])/case.Sb
+#V = [V[k]*np.e**(1j*theta[k]) for k in range(case.nBus)]
+#YL = np.diag([ (case.busData[k].pLoad  - 1j*case.busData[k].qLoad)/case.busData[k].finalVoltage**2 for k in range(case.nBus)])/case.Sb
+#Y = copy(case.Y) + YL
+#IC = [ np.conj((P[k] + 1j*Q[k])/(V[k])) for k in range(case.nBus)]	# Currents calculated through power flow
+#I = Y @ V	# Currents calculated throgh conductance matrix
+#print(' ---> TEST 2: calculating norm(IC - I) = {}'.format(np.linalg.norm(IC - I)))
+#
+## TEST (3): currents in rcase should be the same, be it calculated through power flux or conductance matrix
+#P = np.array([bus.pGen for bus in rCase.busData])/rCase.Sb
+#Q = np.array([bus.qGen for bus in rCase.busData])/rCase.Sb
+#V = [rCase.busData[k].finalVoltage for k in range(rCase.nBus)]
+#theta = [np.pi*rCase.busData[k].finalAngle/180 for k in range(rCase.nBus)]
+#V = [V[k]*np.e**(1j*theta[k]) for k in range(rCase.nBus)]
+#
+#YL = np.diag([ (rCase.busData[k].pLoad  - 1j*rCase.busData[k].qLoad)/rCase.busData[k].finalVoltage**2 for k in range(rCase.nBus)])/rCase.Sb
+#Y = copy(rCase.Y) + YL
+#IC = [ np.conj((P[k] + 1j*Q[k])/(V[k])) for k in range(rCase.nBus)]
+#I = Y @ V
+#print(' ---> TEST 3: calculating norm(IC - I) = {}'.format(np.linalg.norm(IC - I)))
+#
+## TEST (4): currents in rCase generators should be the same when calculated through power flux or Yred matrix
+#P = np.array([bus.pGen for bus in rCase.busData])/rCase.Sb
+#Q = np.array([bus.qGen for bus in rCase.busData])/rCase.Sb
+#V = [rCase.busData[k].finalVoltage for k in range(rCase.nBus)]
+#theta = [np.pi*rCase.busData[k].finalAngle/180 for k in range(rCase.nBus)]
+#V = [V[k]*np.e**(1j*theta[k]) for k in range(rCase.nBus)]
+#
+#YL = np.diag([ (rCase.busData[k].pLoad  - 1j*rCase.busData[k].qLoad)/rCase.busData[k].finalVoltage**2 for k in range(rCase.nBus)])/rCase.Sb
+#Y = copy(rCase.Y) + YL
+#IC = [ np.conj((P[k] + 1j*Q[k])/(V[k])) for k in range(rCase.nGen)]
+#I = Yred @ [V[k] for k in range(rCase.nGen)]
+#print(' ---> TEST 4: calculating norm(IC - I) = {}'.format(np.linalg.norm(IC - I)))
+#print(' ---> I = {}'.format(I))
+#
 # TEST (5): dynamic simulation
-disturbanceData = ['Bus 001', 200 + 1j*30, 1]
-dS(case, disturbanceData, 100)
+disturbanceData = ['Bus003', 2*(10 + 1j*5), 1]
+dS(case, disturbanceData, 40)

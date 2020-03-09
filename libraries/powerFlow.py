@@ -36,7 +36,7 @@ def powerFlow(case,**kwargs):
 
 	# deltaMax is the maximum dX at which the iterations are considered divergent. If dX > deltaMax the method aborts and returns success = False.
 	if ('deltaMax' in kwargs): deltaMax = kwargs['deltaMax']
-	else: deltaMax = 100
+	else: deltaMax = 1e20
 
 	# maxIter is the maximum number of iterations until the method is considered divergent.
 	if ('maxIter' in kwargs): maxIter = kwargs['maxIter']
@@ -56,6 +56,7 @@ def powerFlow(case,**kwargs):
 	# P and Q are the vectors of injected bus power
 	P = np.diag(array([bus.pGen - bus.pLoad for bus in case.busData]))/case.Sb
 	Q = np.diag(array([bus.qGen - bus.qLoad for bus in case.busData]))/case.Sb
+
 	#print(P)
 	# isP, isQ and isV are the matrixes/array that flag P, Q and V measures
 	isP = np.eye(case.nBus)
@@ -90,7 +91,6 @@ def powerFlow(case,**kwargs):
 	# -------------------------------------------------
 	if verbose > 0: print(' --> Beggining power flow method on case \'{0}\'...'.format(case.name))
 	while(True):	# STARTING ITERATIONS
-
 		# Increasing iteration counter
 		itCount += 1
 		
@@ -102,7 +102,6 @@ def powerFlow(case,**kwargs):
 		if verbose > 2: print(' >>>>> H = {}'.format(H))
 		Z = mF.Z(P,Q,isP,isQ)
 		h = mF.h(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV)
-
 		# Calculating state update
 		deltaSLC = Z - h
 
