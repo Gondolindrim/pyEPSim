@@ -201,6 +201,6 @@ def loadCase(fileName,**kwargs):
 		print(' Done.')
 
 	case = cL.case(caseID,busList,branchList,genList,faultList,Sb,Vb)
-	case.updateMatrixes()
+	case.update_matrixes()
 
 	return case

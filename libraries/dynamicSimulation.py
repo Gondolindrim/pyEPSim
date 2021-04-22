@@ -18,7 +18,7 @@ import matplotlib.pyplot as pyplot
 import matplotlib as mplot
 from matplotlib import rc
 
-import progressbar
+import libraries.progressbar
 
 from libraries.dynamicModels import *
 

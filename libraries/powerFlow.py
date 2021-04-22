@@ -28,7 +28,7 @@ from libraries.tabulate.tabulate import tabulate
 from copy import deepcopy
 copy = deepcopy
 
-def powerFlow(case,**kwargs):
+def powerFlow(case,**kwargs): #{{{1
 
 	# absTol is the absolute tolerance used by the method
 	if ('absTol' in kwargs): absTol = kwargs['absTol']
@@ -52,34 +52,14 @@ def powerFlow(case,**kwargs):
 	# Initial guess: flat start
 	V = np.ones(case.nBus)	
 	theta = np.zeros(case.nBus)
+	for n in range(case.nBus): 
+		if case.busData[n].PVtype == 'VT' or case.busData[n].PVtype == 'PV': V[n] = case.busData[n].finalVoltage
+		if case.busData[n].PVtype == 'VT': theta[n] = case.busData[n].finalAngle
+
 
 	# P and Q are the vectors of injected bus power
 	P = np.diag(array([bus.pGen - bus.pLoad for bus in case.busData]))/case.Sb
 	Q = np.diag(array([bus.qGen - bus.qLoad for bus in case.busData]))/case.Sb
-
-	#print(P)
-	# isP, isQ and isV are the matrixes/array that flag P, Q and V measures
-	isP = np.eye(case.nBus)
-	isQ = np.eye(case.nBus)
-	isV = np.ones(case.nBus)
-	isT = np.ones(case.nBus)
-	
-	for i in range(case.nBus):
-		if case.busData[i].PVtype == 'VT':
-			V[i] = case.busData[i].finalVoltage
-			theta[i] = case.busData[i].finalAngle
-			isV[i] = 0
-			isT[i] = 0
-			isP[i,i] = 0
-			isQ[i,i] = 0
-		if case.busData[i].PVtype == 'PV':
-			V[i] = case.busData[i].finalVoltage
-			isV[i] = 0
-			isP[i,i] = 1
-			isQ[i,i] = 0
-		if case.busData[i].PVtype == 'PQ':
-			isP[i,i] = 1
-			isQ[i,i] = 1
 
 	success = False
 
@@ -98,10 +78,10 @@ def powerFlow(case,**kwargs):
 		if verbose > 1: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
 		
 		# Calculating mF.Jacobian
-		H = mF.Jac(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV,isT)	
+		H = mF.Jac(V,theta,case)	
 		if verbose > 2: print(' >>>>> H = {}'.format(H))
-		Z = mF.Z(P,Q,isP,isQ)
-		h = mF.h(V,theta,case.K,case.a,case.phi,case.y,case.Y,case.bsh,isP,isQ,isV)
+		Z = mF.Z(P,Q,case)
+		h = mF.h(V,theta,case)
 		# Calculating state update
 		deltaSLC = Z - h
 
@@ -110,11 +90,11 @@ def powerFlow(case,**kwargs):
 		# Updating V and theta
 		i = 0
 		for j in range(case.nBus):
-			if isT[j]:
+			if case.isT[j]:
 				theta[j] += dX[i]
 				i+=1
 		for j in range(case.nBus):
-			if isV[j]:
+			if case.isV[j]:
 				V[j] += dX[i]
 				i+=1
 
@@ -152,3 +132,4 @@ def powerFlow(case,**kwargs):
 		else: print(' --> Power flow method not successful at iteration {0} with step increment |dX| = {1}.'.format(itCount,norm(dX)))
 
 	return [V, theta, norm(dX), itCount, success]
+

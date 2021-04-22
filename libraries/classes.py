@@ -41,7 +41,8 @@ import libraries.powerFlow as pF
 # --> z is a matrix defining the branch impedances; z[m,n] is the branch impedance from bus m to bus n; if buses m or n are not connected, then z[m,n] is zero. Also, z has a null main diagonal.
 # --> y is the element-wise inverse of z; g being its real part, b its imaginary.
 # --> bsh is the matrix of shunt capacitances between buses; bsh[m,n] is the shunt capacitance of line between buses m and n (zero if m and n are not neighbors); bsh[k,k] is the shunt capacitance of bus k.
-# --> Y is the multi-dimensional thevenin equivalent susceptance of the grid.
+# --> Y is the multi-dimensional thevenin equivalent conductance of the grid.
+# --> Y is the multi-dimensional thevenin equivalent of the shunt conductances of the grid.
 
 class case:
 	def __init__(self,name, busData,branchData,genData,faultData,Sb,Vb):
@@ -64,6 +65,8 @@ class case:
 		#self.bsh = array([[ self.bsh[m,n]/2 if m!=n else self.bsh[m,n] for n in range(self.nBus)] for m in range(self.nBus)])
 
 		self.Y, self.G, self.B = self.buildY();
+		self.Ysh, self.Gsh, self.Bsh = self.buildYsh();
+		self.isP, self.isQ, self.isV, self.isT = self.build_is_matrices()
 
 	def __str__(self):
 
@@ -100,7 +103,7 @@ class case:
 				j = self.getBusNumber(self.branchData[k].fromBus)
 				n = self.getBusNumber(self.branchData[k].toBus)
 				self.branchData[k].activeTransfer = (self.a[j,n]*V[j])**2*self.g[j,n] - self.a[j,n]*self.a[n,j]*V[j]*V[n]*(self.g[j,n]*cos(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) + self.b[j,n]*sin(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]))
-				self.branchData[k].reactiveTransfer = -(self.a[j,n]*V[j])**2**(self.b[j,n] + self.bsh[j,n]) + self.a[j,n]*self.a[n,j]*V[j]*V[n]*( -self.g[j,n]*sin(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) + self.b[j,n]*cos(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) )
+				self.branchData[k].reactiveTransfer = -(self.a[j,n]*V[j])**2*(self.b[j,n] + self.bsh[j,n]) + self.a[j,n]*self.a[n,j]*V[j]*V[n]*( -self.g[j,n]*sin(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) + self.b[j,n]*cos(theta[j] - theta[n] + self.phi[j,n] - self.phi[n,j]) )
 				self.branchData[k].activeLoss = self.g[j,n]*np.abs(V[j]*np.exp(1j*theta[j]) - V[n]*np.exp(1j*theta[n]))**2
 				self.branchData[k].reactiveLoss = -self.b[j,n]*np.abs(V[j]*np.exp(1j*theta[j]) - V[n]*np.exp(1j*theta[n]))**2
 				self.branchData[k].shuntReactivePower = -self.bsh[j,n]*(V[j]**2 + V[n]**2)
@@ -108,9 +111,9 @@ class case:
 			return True
 
 
-# Function case.updateMatrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
+# Function case.update_matrixes is meant to update matrixes r,x,a,bsh and K everytime these are called, or everytime they are needed. This is done to prevent inconsistencies if the user changes a variable directly, say for example:
 # case.branchData[1].r = 5
-# In this case the user has directly updated the value of a branch resistance; all matrixes must be re-calculated. Function updateMatrixes is called whenever case.r, case.x, case.a, case.bsh, case.K are called, so they are recalculated for the present values of bus and branch data.
+# In this case the user has directly updated the value of a branch resistance; all matrixes must be re-calculated. Function update_matrixes is called whenever case.r, case.x, case.a, case.bsh, case.K are called, so they are recalculated for the present values of bus and branch data.
 	def buildy(self):
 		r = np.zeros((self.nBus,self.nBus))
 		x = np.zeros((self.nBus,self.nBus))
@@ -159,10 +162,52 @@ class case:
 			for m in self.K[k]: Y[k,m] = -self.a[k,m]*np.exp(-1j*self.phi[k,m])*self.a[m,k]*np.exp(1j*self.phi[m,k])*(self.g[k,m] + 1j*self.b[k,m])
 			Y[k,k] = self.busData[k].gsh + 1j*self.busData[k].bsh + sum([self.a[k,m]**2*(self.gsh[k,m] + 1j*self.bsh[k,m] + self.g[k,m] + 1j*self.b[k,m]) for m in self.K[k]])
 		return Y, np.real(Y), np.imag(Y)
+
+# Method case.buildY builds the shunt admittance matrix Y of the system
+	def buildYsh(self):
+		Ysh = np.zeros((self.nBus,self.nBus),dtype=complex)
+		for k in range(self.nBus):
+			for m in self.K[k]: Ysh[k,m] = self.a[k,m]**2*(self.gsh[k,m] + 1j*self.bsh[k,m] + self.g[k,m] + 1j*self.b[k,m])
+			Ysh[k,k] = sum(Ysh[k,m] for m in range(self.nBus))
+		return Ysh, np.real(Ysh), np.imag(Ysh)
+
+# Method build_is builds the isP, isQ, isV and isT arrays
+	def build_is_matrices(self):
+		# isP, isQ and isV are the matrixes/array that flag P, Q and V measures.
+		# isP[n,n] == 0 means that the n-th bus active power is not a variable for the power flow method, that is, has a fixed power injection. This generally happens for PQ and PV bus types. The same goes for isQ[n,n] == 0.
+		# isP[n,n] == 1 means that the n-th bus active power is a variable function of V and theta, and should be estimated. This is generally the case for VT bus types. The same goes for isQ[n,n].
+		# isV[n] == 0 means that the voltage of the n-th bus is not a variable and should not be calculated, that is, has a fixed value. This is generally the case for PQ bus types.
+		# isV[n] == 1 means that the voltage of the n-th bus is a varuable and should be estimated. This is generally the case for PQ buses.
+		# isT[n] == 0 means that the voltage angle of the n-th bus is not a variable and should not be estimated, that is, has a fixed value. This generally happens for VT buses.
+		# isT[n] == 1 means that the angle of the n-th bus is not a variable and should be estimated. This is generally true for PQ and PV buses.
+		isP = np.eye(self.nBus)
+		isQ = np.eye(self.nBus)
+		isV = np.ones(self.nBus)
+		isT = np.ones(self.nBus)
+		
+		for i in range(self.nBus):
+			if self.busData[i].PVtype == 'VT':
+				# In the case of VT buses, voltage magnitude and angles are fixed and known. The values used are the ones specified in the netfile as the bus final voltage and final angle values.
+				isV[i] = 0
+				isT[i] = 0
+				isP[i,i] = 0
+				isQ[i,i] = 0
+			if self.busData[i].PVtype == 'PV':
+				isV[i] = 0
+				isP[i,i] = 1
+				isQ[i,i] = 0
+			if self.busData[i].PVtype == 'PQ':
+				isP[i,i] = 1
+				isQ[i,i] = 1
+
+		return isP, isQ, isV, isT
 	
-	def updateMatrixes(self):
+	def update_matrixes(self):
 			self.r, self.x, self.z, self.y, self.g, self.b, self.a, self.phi, self.gsh, self.bsh, self.K = self.buildy()
 			self.Y, self.G, self.B = self.buildY()
+			self.Ysh, self.Gsh, self.Bsh = self.buildYsh()
+			self.isP, self.isQ, self.isV, self.isT = self.build_is_matrices()
+		
 
 # getBusNumber receives the name of a target bus and outputs its number in the busData list. If the name is not found in the list, the function returns an error and outputs the number -1
 	def getBusNumber(self,targetBusName):
@@ -185,7 +230,7 @@ class case:
 		tempCase.busData[i].number = i
 		tempCase.busData[j].number = j
 
-		tempCase.updateMatrixes()
+		tempCase.update_matrixes()
 
 		return tempCase
 
@@ -206,6 +251,8 @@ class case:
 
 		# Checking if power flow is successful
 		if not success: raise Exception(' Case \'{}\' matrix reduction not possible because the power flow calculations returned not successful'.format(self.name))
+
+		# Creates a new case, rCase (short for "reduced case"). The idea is that all fixed power loads defined in the case are substituted for equivalent shunt admittances such that the initial conditions power flow is the same for both cases, but the reduced case can make use of the different 
 		rCase = copy(self)
 		rCase.name = 'Reduced ' + self.name
 
@@ -215,6 +262,7 @@ class case:
 				if rCase.isGen(rCase.busData[j].name) and not rCase.isGen(rCase.busData[i].name):
 					rCase = rCase.swapBuses(rCase.busData[i].name, rCase.busData[j].name)
 
+		# Calculating the equivalent conductance of the bus loads and adding those conductance to the bus shunt conductances
 		YL = np.diag([ (rCase.busData[k].pLoad  - 1j*rCase.busData[k].qLoad)/rCase.busData[k].finalVoltage**2 for k in range(rCase.nBus)])/rCase.Sb
 		#print(YL)
 		for k in range(rCase.nBus):
@@ -222,7 +270,7 @@ class case:
 			rCase.busData[k].gsh += np.real(YL[k, k])
 			rCase.busData[k].bsh += np.imag(YL[k, k])
 
-		rCase.updateMatrixes()
+		rCase.update_matrixes()
 		Y = copy(rCase.Y)
 
 		Y1 = Y[0 : nGen, 0 : nGen]

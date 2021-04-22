@@ -60,7 +60,6 @@ def SMC(x,*args): #{{{1
 	xPq = genData.xPq
 	H = genData.H
 	D = genData.D
-	r = genData.ra
 	pm = genData.pm0	# Mechanical power is constant equal to its initial value
 	el0 = genData.el0
 	Elq = np.real(genData.el0)	# Same as mechanical power
@@ -136,7 +135,7 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	delta = x[2]
 	pm = x[3]
 	pPm = x[4]
-	vAVR = x[5]
+	EFD = x[5]
 	vWash = x[6]
 	vPSS = x[7]
 	
@@ -144,14 +143,13 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	D = genData.D
 	r = genData.ra
 	pmSet = genData.pm0	# Initial value of Pm setpoint is the initial power
-	EFD0 = genData.efd0
 	tPdo = genData.tPdo
 	xPd = genData.xPd
 	xPq = genData.xPq
 	xd = genData.xd
 	tG = genData.tG
 	tT = genData.tT
-	Vt0 = genData.vRef
+	Vtref = genData.vRef
 
 	KPss = genData.KPss
 	Ke = genData.Ke
@@ -170,21 +168,19 @@ def SM1A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	T1 = genData.T1
 	T2 = genData.T2
 
-	EFD = EFD0 + vAVR + vPSS
-
 	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
 	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
-	dvAVR = (Ke*(Vt - Vt0) - vAVR)/Te
+	dEFD = (Ke*(Vt - Vtref + vPSS) - EFD)/Te
 
 	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
 
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
-	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
+	return [dElq, domega, ddelta, dpm, dpPm, dEFD, dvWash, dvPSS] #}}}1
 
 # MODEL (5): synchronous machine one-axis (third-order) model with turbine, governor, AVR and PSS equations, and PF-QV droop control
 def SM1A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
@@ -197,14 +193,13 @@ def SM1A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	delta = x[2]
 	pm = x[3]
 	pPm = x[4]
-	vAVR = x[5]
+	EFD = x[5]
 	vWash = x[6]
 	vPSS = x[7]
 	
 	H = genData.H
 	D = genData.D
 	r = genData.ra
-	EFD0 = genData.efd0
 	tPdo = genData.tPdo
 	xPd = genData.xPd
 	xPq = genData.xPq
@@ -224,7 +219,7 @@ def SM1A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	P = Vq*Iq + Vd*Id
 	Q = Vd*Iq - Vq*Id
 	pmSet = genData.P0 - genData.kP * omega
-	Vt0 = genData.vRef - (Q - genData.Q0)/genData.kQ
+	Vtref = genData.vRef - (Q - genData.Q0)/genData.kQ
 
 	#print('\n >>> Gen \'{}\' passed EL = {}'.format(genData.busName, Elq + 1j*Eld))
 	#print(' >>> Gen \'{}\' passed I = {}'.format(genData.busName, Iq + 1j*Id))
@@ -235,21 +230,19 @@ def SM1A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	T1 = genData.T1
 	T2 = genData.T2
 
-	EFD = EFD0 + vAVR + vPSS
-
 	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
 	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
-	dvAVR = -(Ke*(Vt - Vt0) + vAVR)/Te
+	dEFD = (Ke*(Vtref - Vt + vPSS) - EFD)/Te
 
 	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
 
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
-	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
+	return [dElq, domega, ddelta, dpm, dpPm, dEFD, dvWash, dvPSS] #}}}1
 
 # MODEL (6): synchronous machine one-axis (third-order) model with turbine, governor, AVR and PSS equations, and PF-Q(dV) droop control
 def SM1A_TUR_GOV_AVR_PSS_PFQdV(x,*args): #{{{1
@@ -262,15 +255,14 @@ def SM1A_TUR_GOV_AVR_PSS_PFQdV(x,*args): #{{{1
 	delta = x[2]
 	pm = x[3]
 	pPm = x[4]
-	vAVR = x[5]
+	EFD = x[5]
 	vWash = x[6]
 	vPSS = x[7]
-	Vt0 = x[8]	
+	Vtref = x[8]	
 
 	H = genData.H
 	D = genData.D
 	r = genData.ra
-	EFD0 = genData.efd0
 	tPdo = genData.tPdo
 	xPd = genData.xPd
 	xPq = genData.xPq
@@ -300,23 +292,21 @@ def SM1A_TUR_GOV_AVR_PSS_PFQdV(x,*args): #{{{1
 	T1 = genData.T1
 	T2 = genData.T2
 
-	EFD = EFD0 + vAVR + vPSS
-
 	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
 	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
-	dvAVR = -(Ke*(Vt - Vt0) + vAVR)/Te
+	dEFD = (Ke*(Vtref - Vt + vPSS) - EFD)/Te
 
 	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
 
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
-	dVt0 = - (Q - genData.Q0)/genData.kQ
+	dVtref = - (Q - genData.Q0)/genData.kQ
 
-	return [dElq, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS, dVt0] #}}}1
+	return [dElq, domega, ddelta, dpm, dpPm, dEFD, dvWash, dvPSS, dVtref] #}}}1
 
 # MODEL (7): synchronous machine two-axis (fourth-order) model with turbine, governor, AVR and PSS equations
 def SM2A_TUR_GOV_AVR_PSS(x,*args): #{{{1
@@ -329,7 +319,7 @@ def SM2A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	delta = x[3]
 	pm = x[4]
 	pPm = x[5]
-	vAVR = x[6]
+	EFD = x[6]
 	vWash = x[7]
 	vPSS = x[8]
 	
@@ -337,7 +327,6 @@ def SM2A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	D = genData.D
 	r = genData.ra
 	pmSet = genData.pm0	# Initial value of Pm setpoint is the initial power
-	EFD0 = genData.efd0
 	tPdo = genData.tPdo
 	tPqo = genData.tPqo
 	xPd = genData.xPd
@@ -354,7 +343,6 @@ def SM2A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	Te = genData.Te
 	KPss = genData.KPss
 
-	EFD = EFD0 + vAVR + vPSS
 	Vq = Elq - r*Iq + xPd*Id
 	Vd = Eld - r*Id - xPq*Iq
 	Vt = np.sqrt(Vq**2 + Vd**2)
@@ -365,11 +353,11 @@ def SM2A_TUR_GOV_AVR_PSS(x,*args): #{{{1
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
-	dvAVR = -(Ke*(Vt - Vt0) + vAVR)/Te
+	dEFD = (Ke*(Vtref - Vt + vPSS) - EFD)/Te
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
-	return [dElq, dEld, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
+	return [dElq, dEld, domega, ddelta, dpm, dpPm, dEFD, dvWash, dvPSS] #}}}1
 
 #MODEL (8): synchronous machine two-axis (fourth-order) model with turbine, governor, AVR and PSS equations, and PF-QV droop control
 def SM2A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
@@ -382,13 +370,13 @@ def SM2A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	delta = x[3]
 	pm = x[4]
 	pPm = x[5]
-	vAVR = x[6]
+	EFD = x[6]
 	vWash = x[7]
-	vPSS = x[8]	
+	vPSS = x[8]
+
 	H = genData.H
 	D = genData.D
 	r = genData.ra
-	EFD0 = genData.efd0
 	tPdo = genData.tPdo
 	tPqo = genData.tPqo
 	xPd = genData.xPd
@@ -410,7 +398,7 @@ def SM2A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	P = Vq*Iq + Vd*Id
 	Q = Vd*Iq - Vq*Id
 	pmSet = genData.P0 - genData.kP * omega
-	Vt0 = genData.vRef - (Q - genData.Q0)/genData.kQ
+	Vtref = genData.vRef - (Q - genData.Q0)/genData.kQ
 
 	#print('\n >>> Gen \'{}\' passed EL = {}'.format(genData.busName, Elq + 1j*Eld))
 	#print(' >>> Gen \'{}\' passed I = {}'.format(genData.busName, Iq + 1j*Id))
@@ -421,22 +409,20 @@ def SM2A_TUR_GOV_AVR_PSS_PFQV(x,*args): #{{{1
 	T1 = genData.T1
 	T2 = genData.T2
 
-	EFD = EFD0 + vAVR + vPSS
-
 	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
 	dEld = -1/tPqo*(Eld + (xq - xPq)*Iq)
 	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
-	dvAVR = -(Ke*(Vt - Vt0) + vAVR)/Te
+	dEFD = (Ke*(Vtref - Vt + vPSS) - EFD)/Te
 
 	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
 
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
-	return [dElq, dEld, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS] #}}}1
+	return [dElq, dEld, domega, ddelta, dpm, dpPm, dEFD, dvWash, dvPSS] #}}}1
 
 #MODEL (9): synchronous machine two-axis (fourth-order) model with turbine, governor, AVR and PSS equations, and PF-Q(dV) droop control
 def SM2A_TUR_GOV_AVR_PSS_PFQdV(x,*args): #{{{1
@@ -449,16 +435,15 @@ def SM2A_TUR_GOV_AVR_PSS_PFQdV(x,*args): #{{{1
 	delta = x[3]
 	pm = x[4]
 	pPm = x[5]
-	vAVR = x[6]
+	EFD = x[6]
 	vWash = x[7]
 	vPSS = x[8]
-	Vt0 = x[9]
+	Vtref = x[9]
 	Q0 = x[10]
 
 	H = genData.H
 	D = genData.D
 	r = genData.ra
-	EFD0 = genData.efd0
 	tPdo = genData.tPdo
 	tPqo = genData.tPqo
 	xPd = genData.xPd
@@ -490,24 +475,22 @@ def SM2A_TUR_GOV_AVR_PSS_PFQdV(x,*args): #{{{1
 	T1 = genData.T1
 	T2 = genData.T2
 
-	EFD = EFD0 + vAVR + vPSS
-
 	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
 	dEld = -1/tPqo*(Eld + (xq - xPq)*Iq)
 	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
-	dvAVR = -(Ke*(Vt - Vt0) + vAVR)/Te
+	dEFD = (Ke*(Vtref - Vt + vPSS) + EFD)/Te
 
 	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
 
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
-	dVt0 =  -(Q - Q0)/genData.kQ
+	dVtref =  -(Q - Q0)/genData.kQ
 	dQ0 = -genData.kReg*genData.ratedPower*(dVt0)
-	return [dElq, dEld, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS, dVt0, dQ0] #}}}1
+	return [dElq, dEld, domega, ddelta, dpm, dpPm, dEFD, dvWash, dvPSS, dVt0, dQ0] #}}}1
 
 # MODEL (10): synchronous machine two-axis (fourth-order) model with turbine and governor equations
 def SM2A_TUR_GOV(x,*args): #{{{1
@@ -556,17 +539,16 @@ def SM2A_TUR_GOV_AVR_PSS_iPFQdV(x,*args): #{{{1
 	delta = x[3]
 	pm = x[4]
 	pPm = x[5]
-	vAVR = x[6]
+	EFD = x[6]
 	vWash = x[7]
 	vPSS = x[8]
-	Vt0 = x[9]
+	Vtref = x[9]
 	Q0 = x[10]
 	P0 = x[11]
 
 	H = genData.H
 	D = genData.D
 	r = genData.ra
-	EFD0 = genData.efd0
 	tPdo = genData.tPdo
 	tPqo = genData.tPqo
 	xPd = genData.xPd
@@ -598,22 +580,20 @@ def SM2A_TUR_GOV_AVR_PSS_iPFQdV(x,*args): #{{{1
 	T1 = genData.T1
 	T2 = genData.T2
 
-	EFD = EFD0 + vAVR + vPSS
-
 	dElq = 1/tPdo*(EFD - Elq + (xd - xPd)*Id)
 	dEld = -1/tPqo*(Eld + (xq - xPq)*Iq)
 	domega = ( pm - Elq*Iq - Eld*Id - (xPd - xPq)*Id*Iq - D*omega )/(2*H)
 	ddelta  = omega
 	dpm = pPm
 	dpPm = (pmSet - pPm*(tG + tT) - pm)/(tG*tT)
-	dvAVR = -(Ke*(Vt - Vt0) + vAVR)/Te
+	dEFD = (Ke*(Vtref - Vt + vPSS) - EFD)/Te
 
 	#print(' >>> Gen at bus \'{}\' model Vt - Vtref = {}\n'.format(genData.busName,Vt - Vt0))
 
 	dvWash = KPss*domega - vWash/Tw
 	dvPSS = (T2*dvWash + vWash - vPSS)/T1
 
-	dVt0 =  -(Q - Q0)/genData.kQ
+	dVtref =  -(Q - Q0)/genData.kQ
 	dQ0 = - genData.kReg*genData.ratedPower*(dVt0)
 	dP0 = - genData.ratedPower*genData.kReg*(omega)
-	return [dElq, dEld, domega, ddelta, dpm, dpPm, dvAVR, dvWash, dvPSS, dVt0, dQ0, dP0] #}}}1
+	return [dElq, dEld, domega, ddelta, dpm, dpPm, dEFD, dvWash, dvPSS, dVtref, dQ0, dP0] #}}}1

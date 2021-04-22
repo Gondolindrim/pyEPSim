@@ -50,7 +50,9 @@ verbose = args.verbose
 netFile = args.net
 
 case = lC.loadCase(netFile)
+print(case.isP.sum())
 case.runPowerFlow()
+case.printBusData()
 #print(case)
 #Yred, rCase = case.reduceMatrixes()
 #
@@ -102,5 +104,5 @@ case.runPowerFlow()
 #print(' ---> I = {}'.format(I))
 #
 # TEST (5): dynamic simulation
-disturbanceData = ['Bus003', 2*(10 + 1j*5), 1]
-dS(case, disturbanceData, 40)
+#disturbanceData = ['Bus003', 2*(10 + 1j*5), 1]
+#dS(case, disturbanceData, 40)
