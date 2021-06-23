@@ -45,25 +45,22 @@ import libraries.powerFlow as pF
 # --> Y is the multi-dimensional thevenin equivalent of the shunt conductances of the grid.
 
 class case:
-	def __init__(self,name, busData,branchData,genData,faultData,Sb,Vb):
-		self.name = name
+	def __init__(self, system_data, busData, branchData, genData, machine_data = None, fault_data = None):
+		self.name, self.Sb, self.Vb, self.droopType = system_data
 		self.busData = busData
 		self.branchData = branchData
 		self.genData = genData
-		self.faultData = faultData	
-		self.Sb = Sb			# Base power value
-		self.Vb = Vb			# Base voltage value
+		self.machine_data = [] if machine_data is None else machine_data
+		self.fault_data = [] if fault_data is None else fault_data
 
 		self.nBus = len(self.busData)
 		self.nGen = len(self.genData)
 
-		self.r, self.x, self.z, self.y, self.g, self.b, self.a, self.phi, self.gsh, self.bsh, self.K  = self.buildy()		
-		#self.z = array([[self.r[m,n] + 1j*self.x[m,n] for m in range(self.nBus)] for n in range(self.nBus)])
-		#self.y = array([[1/self.z[m,n] if self.z[m,n] != 0 else 0 for m in range(self.nBus)] for n in range(self.nBus)])
-		#self.g = real(copy(self.y))
-		#self.b = imag(copy(self.y))
-		#self.bsh = array([[ self.bsh[m,n]/2 if m!=n else self.bsh[m,n] for n in range(self.nBus)] for m in range(self.nBus)])
-
+		# Obtaining the matrixes from the parameters:
+		#	- These parameters are defined when the self.build functions are run
+		#	- This means that the case class should be initialized AFTER the bus, branch and generator data are already loaded, that is, when busData, branchData and genData are already defined
+		#	- This explains why in the load_case program the case class is only initialized after these data are defined and not before by using busData = [], branchData = [] and genData = []
+		self.r, self.x, self.z, self.y, self.g, self.b, self.a, self.phi, self.gsh, self.bsh, self.K  = self.buildy()
 		self.Y, self.G, self.B = self.buildY();
 		self.Ysh, self.Gsh, self.Bsh = self.buildYsh();
 		self.isP, self.isQ, self.isV, self.isT = self.build_is_matrices()
@@ -85,8 +82,8 @@ class case:
 	def runPowerFlow(self):
 		V, theta, r, itCount, success = pF.powerFlow(self)
 		if not success:
-			print(' >>> Power flow update for case class instance returned not successful because the power flow method did not converge.')
-			V, theta = array(['None']*self.nBus), array(['None']*self.nBus)
+			print(' >>> Power flow update for case \'{0}\' instance returned not successful because the power flow method did not converge.'.format(self.name))
+			V, theta = array(['NaN']*self.nBus), array(['NaN']*self.nBus)
 			return False
 
 		else:
@@ -186,19 +183,16 @@ class case:
 		isT = np.ones(self.nBus)
 		
 		for i in range(self.nBus):
-			if self.busData[i].PVtype == 'VT':
+			if self.busData[i].bustype == 'VT':
 				# In the case of VT buses, voltage magnitude and angles are fixed and known. The values used are the ones specified in the netfile as the bus final voltage and final angle values.
 				isV[i] = 0
 				isT[i] = 0
+			if self.busData[i].bustype == 'PV':
+				isV[i] = 0
+				isP[i,i] = 0
+			if self.busData[i].bustype in ['PQ', 'dPQ', 'PdQ']:
 				isP[i,i] = 0
 				isQ[i,i] = 0
-			if self.busData[i].PVtype == 'PV':
-				isV[i] = 0
-				isP[i,i] = 1
-				isQ[i,i] = 0
-			if self.busData[i].PVtype == 'PQ':
-				isP[i,i] = 1
-				isQ[i,i] = 1
 
 		return isP, isQ, isV, isT
 	
@@ -233,13 +227,6 @@ class case:
 		tempCase.update_matrixes()
 
 		return tempCase
-
-# isGen(busN) returns True if the bus with number busN has a generator attached to it.
-	def isGen(self, busName):
-		for gen in self.genData:
-			if gen.busName == busName: return True
-
-		return False
 
 # The 'reduceMatrixes' method returns the matrixes of the reduced system. In order to do this, the system will need to be reorganized so that the buses attached to a generator are numbered first. Since this method alters the sequence of buses (that is, it reorganizes the number of the buses), it is recommended that this method be run through a copied instance, that is, run 'reducedCase = copy(case)' and then 'reducedCase.reduceGrid()'. Although this may seem like a problem, given that the user will not know which buses were re-numbered, the bus names defined won'be altered, meaning that the human-readable names do not change. This ultimately means that it is imperative to give each bus a human-readable name. 
 # In order to do all this, the method creates a copy of the original case, called 'rCase' for 'reduced case', upon which it will operate and swap buses.
@@ -293,7 +280,7 @@ class case:
 		print('\n >> Case \'{0}\' bus list'.format(self.name))
 		tabRows = []
 		tabHeader = ['Number', 'Name', 'Load Area', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt conductance\ngsh (p.u.)', 'Shunt susceptancee\nbsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)']
-		for bus in self.busData: tabRows.append([bus.number, bus.name, bus.loadArea, bus.PVtype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.gsh, bus.bsh, bus.finalVoltage, bus.finalAngle])
+		for bus in self.busData: tabRows.append([bus.number, bus.name, bus.loadArea, bus.bustype, bus.pLoad, bus.qLoad, bus.pGen, bus.qGen, bus.gsh, bus.bsh, bus.finalVoltage, bus.finalAngle])
 
 		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
 
@@ -346,31 +333,34 @@ class case:
 # will be added to the pLoad and qLoad after these are converted to shunt impedances.
 # --> "finalVoltage" and "finalAngle" are the calculated (through power flow or state estimation) voltage and angle of the bus. These parameters are optional key arguments that do not need to be given when the instance is created; in this case, they assume the 1 and 0 values ("flat start"). These values can be changed directly or through the runPowerFlow() method in the case class.
 class bus:
-	def __init__(self,number,name,loadArea,PVtype,pLoad,qLoad,pGen,qGen,gsh,bsh,finalVoltage = None, finalAngle = None):
+	def __init__(self, number, name, bustype, finalVoltage, finalAngle, pLoad, qLoad, gsh, bsh, vmax, vmin):
 		self.number = int(number)
 		self.name = str(name)
-		self.PVtype = str(PVtype)
-		self.pLoad = float(pLoad)
-		self.qLoad = float(qLoad)
-		self.pGen = float(pGen)
-		self.qGen = float(qGen)
-		self.bsh = float(bsh)
-		self.gsh = float(gsh)
-
-		self.loadArea = int(loadArea)
-
+		self.bus_type = str(bustype)
 		self.finalVoltage = 1 if finalVoltage is None else finalVoltage
 		self.finalAngle = 0 if finalAngle is None else finalAngle
+		self.pLoad = float(pLoad)
+		self.qLoad = float(qLoad)
+		self.bsh = float(bsh)
+		self.gsh = float(gsh)
+		self.vmax = float(vmax)
+		self.vmin = float(vmin)
+		self.vflag = False
 
 	def __str__(self):
 		tableformat = 'psql'
 		print(' >> Bus	\'{0}\':'.format(self.name))
 		tabRows = []
-		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)', 'Active Generation\npGer (MW)', 'Reactive Generation\nqGen (MVAR)', 'Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (rad)']
-		tabRows.append([self.number, self.name, self.PVtype, self.pLoad, self.qLoad, self.pGen, self.qGen, self.bsh, self.gsh, self.finalVoltage, self.finalAngle ])
-#
-		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
-#
+		tabHeader = ['Number', 'Name', 'Type', 'Active Load\npLoad (MW)', 'Reactive Load\nqLoad (MVAR)','Shunt capacitance\nbsh (p.u.)', 'Shunt conductance\ngsh (p.u.)', 'Final voltage\nV (p.u.)', 'Final angle\ntheta (deg)', 'Maximum\nVoltage\n(p.u.)', 'Minimum\nVoltage\n(p.u.)']
+		tabRows.append([self.number, self.name, self.bus_type, self.pLoad, self.qLoad, self.bsh, self.gsh, self.finalVoltage, self.finalAngle*180/np.pi, self.vmax, self.vmin ])
+		return tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat)
+
+# Function get_bus takes a bus name and returns the bus object that has that name.
+def get_bus(bus_name, bus_list):
+	for bus in bus_list:
+		if bus_name == bus.name: return bus
+	else: return None
+		
 # (3) Branch object {{{1
 # The branch object stores data for a particular branch of the system:
 #--> "fromBus" and "toBus" are the numbers of respectively the first and second buses attached to the branch.
@@ -379,7 +369,7 @@ class bus:
 #--> "a" is the turns ratio of the transformer attached to the branch when there is one.
 #--> "phi" is the a
 class branch:
-	def __init__(self,number,fromBus,toBus,r,x,gsh,bsh,a,phi,activeTransfer = 0,reactiveTransfer = 0, activeLoss = 0, reactiveLoss = 0, shuntReactivePower = 0):
+	def __init__(self, number, fromBus, toBus, r, x, gsh, bsh, a, phi, minphi, maxphi, status, activeTransfer = None, reactiveTransfer = None, activeLoss = None, reactiveLoss = None, shuntReactivePower = None):
 		self.number = int(number)
 		self.fromBus = str(fromBus)
 		self.toBus = str(toBus)
@@ -389,26 +379,66 @@ class branch:
 		self.bsh = float(bsh)
 		self.a = float(a)
 		self.phi = float(phi)
-		self.reactiveTransfer = float(reactiveTransfer)
-		self.activeTransfer = float(activeTransfer)
-		self.activeLoss = float(activeLoss)
-		self.reactiveLoss = float(reactiveLoss)
-		self.shuntReactivePower = float(shuntReactivePower)
+		self.minphi = float(minphi)
+		self.maxphi = float(maxphi)
+		self.status = bool(status)
+		self.reactiveTransfer = float('NaN') if reactiveTransfer is None else float(reactiveTransfer)
+		self.activeTransfer = float('NaN') if activeTransfer is None else float(activeTransfer)
+		self.activeLoss = float('NaN') if activeLoss is None else float(activeLoss)
+		self.reactiveLoss = float('NaN') if reactiveLoss is None else float(reactiveLoss)
+		self.shuntReactivePower = float('NaN') if shuntReactivePower is None else float(shuntReactivePower)
+
+	def __str__(self):
+		tableformat = 'psql'
+		print(' >> Branch from bus \'{0}\' to bus \'{1}\':'.format(self.fromBus, self.toBus))
+		tabRows = []
+		tabHeader = ['Number', 'Tap bus', 'Load bus', 'Resistance\n(p.u.)', 'Reactance\n(p.u.)','Shunt conductance\ngsh (p.u.)', 'Shunt susceptance\nbsh (p.u.)', 'Transformer\nRatio (-)', 'Transformer phase\nangle (deg)', 'Minimum phase\nangle (p.u.)', 'Maximum phase\nangle (p.u.)', 'Status', 'Active Power\nTransfer (p.u.)', 'Reactive Power\nTransfer (p.u.)', 'Active Power\nLoss (p.u.)', 'Reactive Power\nLoss (p.u.)', 'Shunt reactive\nload (MVAr)']
+		tabRows.append([self.number, self.toBus, self.fromBus, self.r, self.x, self.gsh, self.bsh, self.a, self.phi*180/np.pi, self.minphi*180/np.pi, self.maxphi*180/pi, self.status, self.activeTransfer, self.reactiveTransfer, self.activeLoss, self.reactiveLoss, self.shuntReactivePower])
+#
+		return tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat)
+
 
 # (4) Generator object {{{1
-# The generator object stores the parameters of a given generator. Generators are modelled as synchronous machines:
-# --> "H" is the inertia constant of the machine, in p.u.;
-# --> "D" is the damping coefficient;
-# --> "ra" is the equivalent armature resistance;
-# --> "xL" is the rotor magnetizing reactance (aka static reactance)
-# --> "xq" and "xd" are the quadrature- and direct-axis static reactances of the rotor;
-# --> "xPq" and "xPd" are the quadrature- and direct-axis transient reactances of the rotor;
-# --> "xPPq" and "xPPd" are quadrature- and direct-axis sub-transient reactances of the rotor;
-# --> "tPqo" and "tPdo" are the rotor quadrature- and direct-axis transient time constants;
-# --> "tPPqo" and "tPPdo" are rotor quadrature- and direct-axis sub-transient time constants;
 class generator:
-	def __init__(self,busName,ratedPower,ratedVoltage,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo, Ke, Te, vRef, KPss, Tw, T1, T2, tG, tT, modelDepth):
-		self.busName = str(busName)
+	def __init__(self, bus_name, p_gen, q_gen, q_max, q_min, p_max, p_min, v_ref, p_rated, q_rated, v_rated, p_ramp, q_ramp):#,H,D,ra,xL,xd,xPd,xPPd,tPdo,tPPdo,xq,xPq,xPPq,tPqo,tPPqo, Ke, Te, vRef, KPss, Tw, T1, T2, tG, tT, modelDepth):
+		self.bus_name = str(bus_name)
+		self.p_rated = str(p_rated)
+		self.q_rated = str(q_rated)
+		self.v_rated = str(v_rated)
+		self.p_gen = str(p_gen)
+		self.q_gen = str(q_gen)
+		self.p_min = str(p_min)
+		self.p_max = str(p_max)
+		self.q_min = str(q_min)
+		self.q_max = str(q_max)
+		self.v_ref = str(v_ref)
+		self.p_ramp = str(p_ramp)
+		self.q_ramp = str(q_ramp)
+
+	def __str__(self):
+		tableformat = 'psql' 
+
+		print('\n >> Generator at bus \'{}\''.format(self.bus_name))
+		tabRows = []
+		tabHeader = ['Generated P (MW)', 'Generated Q (MVAr)', 'Max Q (MVAr)', 'Min Q (MVAr)', 'Max P (MW)', 'Min P (MW)', 'Reference V (p.u.)', 'Rated P (MW)', 'Rated Q (MVAr)', 'Rated V (kV)', 'P ramp (MW/kV)', 'Q ramp (MVAr/kV)']
+		gen = self
+		tabRows.append([self.p_gen, self.q_gen, self.q_max, self.q_min, self.p_max, self.p_min, self.v_ref, self.p_rated, self.q_rated, self.v_rated, self.p_ramp, self.q_ramp])
+
+		print(tabulate(tabRows,headers=tabHeader, numalign='right', tablefmt=tableformat))
+		return ''
+
+# isGen(busN) returns True if the bus with name 'busName' has a generator attached to it.
+def is_gen(bus_name, gen_list):
+	is_gen = False
+	for gen in gen_list:
+		if bus_name == gen.bus_name: is_gen = true
+	return is_gen
+
+
+
+# (5) Machine object {{{1
+class machine:
+	def __init__(self):
 		self.ratedPower = float(ratedPower)
 		self.ratedVoltage = float(ratedVoltage)
 		self.H = float(H)

@@ -47,10 +47,9 @@ from copy import deepcopy as copy
 
 args = pA.parseArguments()
 verbose = args.verbose
-netFile = args.net
+net_file = args.net
 
-case = lC.loadCase(netFile)
-print(case.isP.sum())
+case = lC.load_case(net_file)
 case.runPowerFlow()
 case.printBusData()
 #print(case)

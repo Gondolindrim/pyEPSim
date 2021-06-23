@@ -1,7 +1,7 @@
 -------------------------------------------------
 PYEPSIM CASE FILE DOCUMENTATION
 -------------------------------------------------
-	The case file or netfile is a list of parameters needed to successfully run a power flow simulation of an electric system. pyEPSim uses its own format, based on the  IEEE Common Data Format (see reference [1]). Columns are separated by a TAB character, and each value has a specific type, obligatoriness, range and units.
+	> The case file or netfile is a list of parameters needed to successfully run a power flow simulation of an electric system. pyEPSim uses its own format, based on the  IEEE Common Data Format (see reference [1]). Columns are separated by a TAB character, and each value has a specific type, range and units.
 
 	Value types:
 		(I) Integer
@@ -9,16 +9,13 @@ PYEPSIM CASE FILE DOCUMENTATION
 		(F) Float
 		(L) Logic (0 or 1)
 
-	Obligatoriness:
-		(*) = obligatory
-		(**) = not user-defined and updated after a power flow is calculated
-		(***) = none or both; please read the note.
-
 	Range:
 		(+0) Only non-negative values allowed (zero allowed)
 		(++) Only positive values allowed (zero not allowed)
 		(-0) Only non-positive values allowed (zero allowed)
 		(--) Only negative values allowed
+		(01) Only floats between and including 0 and 1
+		OBSERVATION: in some cases, variables can be input as 'NaN', 'inf' or '-inf'. Such cases are special and excludent, meaning that these keywords can be used only in the fields they are expressly allowed to. Using them in other variables will cause the netfile parser program (loadClass) to terminate execution if one of those keywords is used in a case they are not allowed to.
 
 	Units:
 		(pu) Value must be in per-unit value.
@@ -28,39 +25,60 @@ PYEPSIM CASE FILE DOCUMENTATION
 		(kV) Value must be in kilovolts
 		(deg) Value must be in degrees (note: internally, pyEPSim works with radians)
 
+	> The way that the case file is defined is by sections:
+		- Case data: a "case" is a denominator for what describes the whole system in an overall sense. pyEPSim creates a 'case' object which has certain properties. The immediate ones are a nanem (human-readable) to identify the case and its many instances (reduced, changed, perturbed etc), the power and voltage base values, and the droop type used in the power flow simulations. The case data is given in rows.
+		- Bus data: defines bus characteristics as given in columns; each bus is a row in the matrix while each column defines a property of that bus.
+		- Branch data: defines branch characteristics as given in columns; each branch is a row in the matrix while each column defines a property of that bus.
+		- Generator data: defines branch characteristics as given in columns; each branch is a row in the matrix while each column defines a property of that bus.
+
+	> Each section is delimited by two strings called 'data cards' which the 'load_case' parser program looks for; one of these being the data start card (shortened SC) and the other the data finish card (shortened FC).
+		* The program looks for the SC, and parses the information until the FC is found. The information parsing is done this way because there is no telling at first how many buses, branches, generators, faults, machines there are, so the number of these entities present in the system is determined by the row size of the data. For instance, the parsing program keeps adding buses as long as the FC is found; at the end, it counts how many buses were added.
+		* The sections are parsed independently and do not need an exact order. However, an order of system data -> bus data -> branch data -> generator data -> machine data -> fault data is advised as it is the most logical sequence.
+		* In order to allow for comments and documentation of each section, the parsing program only acquires and validates data that is between the data cards.Everything out of such cards is ignored, meaning the netfile can be organized however the user wants. This also allows for comments and notes.
+	> In short, each section is defined as follows. For examples, see the IEEE 39-Bus netfile in ./cases/case39.net
+
+	<START CARD>
+	<data>
+	<FINISH CARD>
+
+	> Raw data is input in columns, with rows being separated by the enter key ('\n' character) and columns separated between a tab key ('\t' character). This is done so that data can be defined in a tabular way, easier to read and maintain. System data is a little bit different in that the parameters are fixed and given by keywords 'CASE ID', 'MVA BASE', 'VOLTAGE BASE', 'DROOP TYPE'; only those keywords, in that exact order, are accepted.
+		
+	> The data loading program is quite strict when acquiring data; if any parameter is out of specification, the whole program is stopped and an error message is shown. This was done to make sure that there are not inconsistencies in case parameters. Each variable is checked thoroughly for type, range, special possibilities and cross-data inconsistencies.
+		* Type: variable type (float, integer)
+		* Range: in the case of floats, the numerical range. In case of special strings (like bus types 'PV', 'PQ', and so on), only the listed values can be used. 
+		* Special possibilities: in some cases, a float variable can be input as 'inf' or 'NaN'. These uses are restricted to the variables that allow them, however;
+		* Cross-data inconsistencies: for instance, the Active Ramp of a generator can be input as 'NaN' in case it is not available; the problem is that this parameter is needed for Droop simulations. Hence, if the bus type is defined as a Droop type ('PdQ' or 'dPQ') and that variable is defined as 'NaN', the program will give an error.
+
+	> Machine and fault data are used for dynamic simulation and can be omitted in case only power flow or state estimation procedures are needed. In this case, DO NOT fill them with 'NaN', just do not use their data cards or remove their sections from the net file.	
+
 -------------------------------------------------
 REFERENCES
 -------------------------------------------------
 	[1] Pierce et al. "Common Format For Exchange of Solved Load Flow Data," in IEEE Transactions on Power Apparatus and Systems, vol. PAS-92, no. 6, pp. 1916-1925, Nov. 1973, doi: 10.1109/TPAS.1973.293571.
 	[2] MATPOWER documentation: description of case format. Available at https://matpower.org/docs/ref/matpower5.0/caseformat.html . Last accessed may 03, 2021.
 
--------------------------------------------------
-
 ------------------------------------------------
 SYSTEM DATA ROWS
 
-01 CASE ID (S)(*)
+	- The rows must be given in this exact order, and all of them are checked for.
+
+01 CASE ID (S)
 	- A human-readable identifier name for the case
-02 MVA BASE (MVA)(++)(F)(*)
+02 MVA BASE (MVA)(++)(F)
 	- Used as the grid's per-unit power reference to translate between model and system units
 	- Defaults to 100MVA
-03 VOLTAGE BASE (kV)(++)(F)(*)
+03 VOLTAGE BASE (kV)(++)(F)
 	- Same as row 02
 	- Defaults to 100kV
 03 DROOP TYPE (S)
-	- Use 'LINEAR', 'HYPERBOLIC', 'PERFECT' or 'NONE'
-	- May be omitted; default is 'NONE'
+	- Use 'LINEAR', 'HYPERBOLIC', 'PERFECT' or 'NONE'.
 -------------------------------------------------
 BUS DATA COLUMNS:
 
-01 Name (S)(*)
+01 Name (S)
 	- A human-readable name that defines the bus.
-	- This name needs to be unique.
-02 Load flow area number (I)
-	- Used to calculate power indexes (loss, efficiency etc) by area.
-03 Loss zone number (I)
-	- Like load flow area, ised to calculate area power indexes.
-04 Type (S)(*)
+	- This name needs to be unique to each bus.
+02 Type (S)
 	- Defines the bus type in power flow simulations.
 		(1) PQ - Active and reactive bus injections are fixed; voltage is a variable.
 			* The P value adopted is the difference between generated active power (for buses that have a generator attached) and the active load
@@ -99,75 +117,73 @@ BUS DATA COLUMNS:
 				> That particular generator's active generation is fixed at the maximum or minimum;
 				> The extrapolated generator is removed from the active Droop pool;
 				> The algorithm re-runs the power flow with the new settings.
+			* If there are Droop-type buses (dPQ or PdQ) and the case Droop Type is defined as 'NONE', all Droop buses will be treated as PQ.
+			* Even if there are no Droop-type buses in the case, the Droop values in GENERATOR DATA is still checked, so just use 'NaN' for the Droop values; that way the program will know these values are not defined or not used.
 
 
-05 Final voltage (pu)(+0)(F)(**)
+03 Final voltage (pu)(+0)(F)
 	- Voltage magnitude calculated by a power flow method and updated after a successful simulation.
 	- Obligatory for VT type buses, this is the angle magnitude value used.
-	- For non-VT type buses, define as 'NaN' if no power flow has been executed.
-06 Final angle (deg)(F)(***)
+	- For non-VT type buses, define as 'NaN' (for Not Available Now) if no power flow has been executed.
+04 Final angle (deg)(F)
 	- Voltage angle calculated by a power flow method and updated after a successful simulation.
 	- Obligatory for VT type buses, this is the angle magnitude value used.
-	- For non-VT type buses, define as 'NaN' if no power flow has been executed.
-07 Active load (MW)(+0)(F)(*)
+	- For non-VT type buses, define as 'NaN' (for Not Available Now) if no power flow has been executed.
+05 Active load (MW)(F)
 	- Attached load in MW.
-08 Reactive load (MVAr)(F)(*)
+06 Reactive load (MVAr)(F)
 	- Attached load in MVA.
-09 Base (kV)(++)(F)(*)
-	- Bus base voltage value for bus per-unit base.
-10 Shunt conductance (pu)(+0)(F)(*)
+07 Shunt conductance (pu)(+0)(F)
 	- Use zero for no shunt load.
-	- Per-unit basis used is the bus'.
-11 Shunt susceptance (pu)(F)(*)
+	- Per-unit basis used is the system's.
+08 Shunt susceptance (pu)(F)
 	- Use zero for no shunt load.
-	- Per-unit basis is the bus'.
-12 Maximum voltage limit (pu)(++)(F)(*)
+	- Per-unit basis is the system's.
+09 Maximum voltage limit (pu)(++)(F)
 	- Use 'inf' for infinite; internally, the program will set it to 10.
-	- Per-unit basis used is the bus'.
-13 Minimum voltage limit (pu)(+0)(F)(*)
-	- Per-unit basis used is the bus'.
-14 Voltage limits flag (L)(**)
+	- Per-unit basis used is the system's.
+	- Use 'inf' for infinite. pyEPSim internally sets this variable to two (2).
+10 Minimum voltage limit (pu)(+0)(F)
+	- Per-unit basis used is the system's.
+	- Use zero if none available.
+11 Voltage limits flag (L)
 	- Defaults to zero (false). Updated after a power flow to one if the method detected a final voltage beyond limits set in columns 12 and 13.
 
 -------------------------------------------------
 BRANCH DATA COLUMNS
 
-01 Tap bus name (S)(*)
-	- For transformers or phase shifters, the side of the model the non-unity tap is on.
+01 Load bus name (S)
+	- For transformers or phase shifters, the side of the model the device or bus load impedance is on, commonly referred to as "from bus"
 	- Must match one of the bus names as set in bus field 01.
-02 Load bus name (S)(*)
-	- For transformers and phase shifters, the side of the model the device impedance is on.
+02 Tap bus name (S)
+	- For transformers and phase shifters, the side of the model the non-unity tap is on, commonly referred to as "to bus"
 	- Must match one of the bus names as set in bus field 01.
-03 Load flow area (I)
-04 Loss zone (I)
-05 Type (I)(*)
-	(1) Fixed tap and phase; also used for transmission lines.
-	(2) Variable tap for voltage control (TCUL, LTC)
-	(3) Variable tap (turns ratio) for MVAR control
-	(4) Variable phase angle for MW control (phase shifter)
-06 Branch resistance R (pu)(+0)(F)(*)
+03 Type (S)
+	(F)   For "fixed". Fixed tap and phase; also used for transmission lines.
+	(VTV) Variable tap for voltage control (TCUL, LTC)
+	(VTQ) Variable tap (turns ratio) for MVAR control
+	(VP)  Variable phase angle for MW control (phase shifter)
+04 Branch resistance R (pu)(+0)(F)
 	- Per unit basis used is the system's.
-07 Branch reactance X (pu)(++)(F)(*)
+05 Branch reactance X (pu)(++)(F)
 	- Per unit basis used is the system's.
-08 Line shunt conductance Gsh (pu)(+0)(F)(*)
+06 Line shunt conductance Gsh (pu)(+0)(F)
 	- Per-unit basis used is the system's.
-09 Line shunt charging susceptance Bsh (pu)(+0)(F)(*)
+07 Line shunt charging susceptance Bsh (pu)(+0)(F)
 	- Per-unit basis used is the system's.
-10 Active power transfer (MW)(F)(**)
-11 Reactive power transfer (MVAar)(F)(**)
-12 Active power loss (MW)(F)(**)
-13 Reactive power loss (MVAr)(F)(**)
-14 Transformer final turns ratio (++)(F)(***)
+08 Transformer final turns ratio (++)(F)
 	- For transmission lines, use 1.0.
 	- For branch types 1 and 4, this is the tap value used; for variable taps, it is updated after a power flow.
-15 Transformer (phase shifter) final angle in degrees (F)(***)
+09 Transformer (phase shifter) final angle in degrees (F)
 	- For transmission lines, use 0.
 	- For branch types 1, 2 and 3, this is the phase value used; for variable phase, this is updated after a power flow.
-16 Minimum phase shift (F)(***)
-	- Obligatory for branch type 4.
-17 Maximum phase shift (F)(***)
-	- Obligatory for branch type 4.
-18 Status (L)(*)
+10 Minimum tap/phase shift (F)
+	- Obligatory for branches with variable taps or transformer phase (VTV, VTQ, VP).
+	- For branches of fixed type (F), this parameter is mostly ignored but for consistency it is stored as input in the netfile. Hence. the recommended is to input NaN.
+11 Maximum tap/phase shift (F)
+	- Obligatory for branches with variable taps or transformer phase (VTV, VTQ, VP).
+	- For branches of fixed type (F), this parameter is mostly ignored but for consistency it is stored as input in the netfile. Hence. the recommended is to input NaN.
+12 Status (L)
 	- Either zero for a inactive branch and one for an active one.
 	- Inactive branches are disregarded as if they do not exist in the system.
 	- Beware of islanding when inactivating branches!
@@ -179,28 +195,28 @@ GENERATOR DATA COLUMNS
 		* In PV type buses, the P injection value adopted will be the difference between generated active power (generator data column 02) and bus active load (bus data column 07). The voltage magnitude value adopted will be the generator voltage setpoint (generator column data 08)
 		* In PQ type buses, P injection will be adopted as the difference between generator active power and bus active load; Q injection will be adopted as the difference between generator reactive power and bus reactive load
 
-01 Bus name (S)(*)
+01 Bus name (S)
 	- Name of the bus the generator is attached to. Must match one of the bus names in the first field of the bus properties.
-02 Generated active power (MW)(+0)(F)(*)
+02 Generated active power (MW)(+0)(F)
 	- Active power injected into the bus the generator is attached to. Use zero for synchronous condensers.
-03 Generated reactive power (MVAr)(F)(*)
+03 Generated reactive power (MVAr)(F)
 	- Reactive power injected into the bus the generator is attached to.
-04 Maximum generated reactive power (MVAr)(F)(*)
+04 Maximum generated reactive power (MVAr)(F)
 	- Maximum reactive power the generator can safely output.
 	- If this value is extrapolated after a power flow simulation, the algorithm will fix reactive power injection to this maximum value and re-run the process. Additionally, if the generator is a participant in the reactive Droop pool, it is also removed from that pool
 	- This value is used in dynamic simulations as the maximum value for QV curves in QV Droop controllers. Use 'inf' for infinite.
-05 Minimum generated reactive power (MVAr)(F)(*)
+05 Minimum generated reactive power (MVAr)(F)
 	- The minimum reactive power the generator needs to output to operate properly.
 	- If this value is extrapolated during power flow simulation, the algorithm will fix reactive power injection to this minimum value and re-run the process.
 	- This value is used in dynamic simulations as the minimum value for QV curves in QV Droop controllers. Use '-inf' for -infinite; internally the algorithm will set it to -10.
-06 Maximum generated active power (MW)(+0)(F)(*)
+06 Maximum generated active power (MW)(+0)(F)
 	- The maximum active power the generator can safely output.
 	- If this value is extrapolated during power flow simulation, the algorithm will fix bus active power injection as this maximum value, and re-run the process.
 	- This value is used in dynamic simulations as the minimum value for QV curves in QV Droop controllers. Only non-negative values allowed.
-07 Minimum generated active power (MW)(+0)(F)(*)
+07 Minimum generated active power (MW)(+0)(F)
 	- The minimum active power output the generator needs to operate properly.
 	- If this value is extrapolated during power flow simulation, the algorithm will fix active generated power to this value. Additionally, if the generator is a participant of the active Droop pool, it is also removed from that pool.
-08 Voltage magnitude reference (pu)(++)(F)(*)
+08 Voltage magnitude reference (pu)(++)(F)
 	- Terminal voltage magnitude reference.
 	- For PV and VT type buses, this value is the voltage magnitude used in power flow and state estimation simulations
 	- For Droop type buses (dPQ or PdQ) this value is the voltage reference V0 used for linear reactive Droop
@@ -211,28 +227,34 @@ GENERATOR DATA COLUMNS
 10 Rated reactive power (MVAr) (F)***
 	- Obligatory for generators participating in reactive Droop power flow simulations
 		> For linear Droop, this is the Q0 value adopted for the reference power in the Droop curve
-		> For perfect Droop, this is the rated value adopted to calculate the power sharing coefficient alpha of the generator
-11 Active Droop ramp (MW/kV)(--)(F)(***)
+		> For perfect Droop, this is the rated value adopted to calculate the power sharing coefficient beta of the generator
+11 Rated voltage (kW)(++)(F)
+	- Rated generator working voltage
+	- Not to be mistaken for the voltage reference
+12 Active Droop ramp (MW/kV)(--)(F)
 	- Obligatory for buses participating in linear active power Droop
-	- Used in linear active Droop power flow and dynamic simulations
-12 Reactive Droop ramp (MVAr/kV)(--)(F)(***)
-	- Obligatory for all droop-type buses
-	- Used in linear reactive Droop power flow and dynamic simulations
+	- Used in linear active Droop power flow and dynamic simulations. Ignored in other cases.
+	- In case it is not available, use 'NaN'; the checking program will throw an error if the bus is a Droop type but the ramp is defined as such.
+13 Reactive Droop ramp (MVAr/kV)(--)(F)
+	- Obligatory for buses participating in linear reactive power Droop
+	- Used in linear reactive Droop power flow and dynamic simulations. Ignored in other cases.
+	- In case it is not available, use 'NaN'; the checking program will throw an error if the bus is a Droop type but the ramp is defined as such.
 
 -------------------------------------------------
-MACHINE DATA COLUMNS: these data are used in dynamic (fault and load simulation) procedures. They are disregarded in static procedures.
+MACHINE DATA COLUMNS: these data are used in dynamic (fault and load simulation) procedures. They are disregarded in static procedures. Each machine must be a one-to-one match to a generator row.
 
-01 Bus name (S)(*)
+01 Bus name (S)
 	- The bus the machine is attached to.
 	- Must match one of the bus names in the first field and the bus must have a generator attached too.
-02 Rated power (MVA)(++)(*)
+	- Two machines cannot be defined by the same generator.
+02 Rated power (MVA)(++)
 	- Value used as the machine per-unit power basis.
 	- Does not need to match the active or reactive power ratings of the generator (generator data columns 09 and 10).
 	- This value will NOT be used for Droop dynamic or static simulations, only to convert units between the system and the generator's p.u. systems.
-03 Rated voltage (kV)(*)
+03 Rated voltage (kV)
 	- Value used as the machine's  per-unit voltage basis.
-04 Inertia constant H (pu)(F)(++)(*)
-05 Damping constant D (pu)(F)(++)(*)
+04 Inertia constant H (pu)(F)(++)
+05 Damping constant D (pu)(F)(0+)
 	- Use zero for none.
 06 Armature resistance r_a (pu)(F)(++)
 07 Leakage reactance x_L (pu)(F)(++)
@@ -263,7 +285,7 @@ MACHINE DATA COLUMNS: these data are used in dynamic (fault and load simulation)
 	- Null value means the governor is instantaneous
 26 Turbine time constant tT (F)(+0)
 	- Null value means the turbine is instantaneous
-27 Model dept (I)(*):
+27 Model dept (I):
 	- Defaults to 1.
 	(1) - SM2: second-order ("classic") model with damping
 	(2) - SM1A: third-order ("One-Axis") model
