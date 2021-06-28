@@ -12,11 +12,8 @@
 # are explained in their respective object definitions.
 # -------------------------------------------------
 
+import libraries.logmessages as logmgs
 import numpy as np
-import colorama
-from colorama import Fore, Back, Style
-colorama.init()
-
 import libraries.classes as cL
 
 from copy import deepcopy
@@ -33,20 +30,12 @@ def isinteger(x):
 	except ValueError: return False
 	return True
 
-# ERROR CHECK FUNCTIONS AND ERRORS ------------------------------------------------------------ {{{1
-# These functions and exceptions are custom-tailored to handle error checks in the loadCase function.
-# error_message is a string function that formats the string in a constrasted format to indicate an error has ocurred: bold, red "ERROR" with an arrow and a string.
-# warning_message and good_message have the same spirit, but in yellow and green.
-def error_message(string): return Style.BRIGHT + Fore.RED + ' -> ERROR: ' + Style.RESET_ALL + string
-def warning_message(string): return '\n'+ Style.BRIGHT + Fore.YELLOW + ' -> WARNING: ' + Style.RESET_ALL + string
-def good_message(string): return Style.BRIGHT + Fore.GREEN + ' -> ' + Style.RESET_ALL + string
-
 # VariableCheckError is used when a given variable, as declared in the netfile, is not in the type or range it should be. Additionally, it is also used to confirm incosistencies between bus and generator types. {{{2
 class VariableCheckError(Exception):
 	def __init__(self, *args):
 		self.message = args[0]
 	def __str__(self):
-		return error_message(self.message)
+		return logmgs.error_message(self.message)
 
 # Definitions of NaN, posinf and neginf, true, false and bool: these return arrays of possible definitions of NaN (Not Available Now or Not A Number), positive infinity and negative infinity, boolean true or false and boolean. {{{2
 # These functions work as a roster of possible definitions for these terms that the user can input in the netfile, and are primarily used in the variable_check function to check if a variable is defined as one of these words.
@@ -62,7 +51,7 @@ def bool_definitions(): return true_definitions() + false_definitions()
 def isbool(x): return x in bool_definitions()
 def bool_eval(x):
 	if not isbool(x):
-		print('\n' + warning_message('A boolean evaluation was requested for value \'{0}\' but it is not in the bool definitions.').format(x))
+		print('\n' + logmgs.warning_message('A boolean evaluation was requested for value \'{0}\' but it is not in the bool definitions.').format(x))
 		return None
 	if x in false_definitions(): return False
 	else: return True
@@ -91,7 +80,7 @@ def variable_check(variable, **kwargs):
 	if 'allowed_range' in kwargs:
 		allowed_range = kwargs.get('allowed_range')
 		if allowed_type != 'float':
-			print('\n' + warning_message('A range check was requested for ' + variable_card + ' but it is not a float, hence the check will not be performed.'), end = '')
+			print('\n' + logmgs.warning_message('A range check was requested for ' + variable_card + ' but it is not a float, hence the check will not be performed.'), end = '')
 		else:
 			if allowed_range == '++' and float(variable) <= 0 : raise VariableCheckError(custom_message if custom_message else variable_card + ' has declared value \'{0}\' but should be a positive.'.format(variable))
 			if allowed_range == '+0' and float(variable) < 0: raise VariableCheckError(custom_message if custom_message else variable_card + ' has declared value \'{0}\' but should be a non-negative.'.format(variable))
@@ -126,7 +115,7 @@ def data_card_search(data_card,file):
 	line = file.readline().strip().split('\t')
 	while data_card not in line[0]:
 		if line[0] == '':
-			print('\n' + error_message('data card \'{0}\' was not found!'.format(data_card)))
+			print('\n' + logmgs.error_message('data card \'{0}\' was not found!'.format(data_card)))
 			exit()
 
 		line = file.readline().strip().split('\t')
@@ -137,7 +126,7 @@ def data_card_search(data_card,file):
 def parse_system_data(file_name):
 	with open(file_name,'r') as file:
 
-		print(good_message('Loading system data from file \'{0}\'... ').format(file.name), end = '')
+		print(logmgs.good_message('Loading system data from file \'{0}\'... ').format(file.name), end = '')
 
 		# Serching for generator data finish data card
 		data_card_search('END OF SYSTEM DATA', file)
@@ -163,14 +152,14 @@ def parse_system_data(file_name):
 		variable_check(line[1], variable_card = 'Case DROOP TYPE', allowed_values = ['NONE','PERFECT','LINEAR','HYPERBOLIC'])#: raise VariableCheckError(' --> Case Droop is defined as \'{0}\' but must be \'NONE\', \'LINEAR\', \'PERFECT\' or \'HYPERBOLIC\''.format(line[1]))
 		droop_type = line[1]
 
-		print(Style.BRIGHT + Fore.GREEN + 'Done.' + Style.RESET_ALL)
+		print(logmgs.green_string(' Done.'))
 
 	return [case_id, Sb, Vb, droop_type]
 
 # PARSING BUS DATA ---------------------------------------------------------------------------- {{{1
 def parse_bus_data(file_name):
 	with open(file_name,'r') as file:
-		print(good_message('Loading bus data from file \'{0}\'... ').format(file.name), end = '')
+		print(logmgs.good_message('Loading bus data from file \'{0}\'... ').format(file.name), end = '')
 		# Serching for generator data finish data card
 		data_card_search('END OF BUS DATA', file)
 		# Searching for generator data start data card
@@ -184,7 +173,7 @@ def parse_bus_data(file_name):
 			if 'END OF BUS DATA' in line[0] : break
 
 			if len(line) != 10:
-				print('\n' + error_message('bus data requires 10 parameters but {0} are given in row {1}.'.format(len(line), len(bus_list) + 1)))
+				print('\n' + logmgs.error_message('bus data requires 10 parameters but {0} are given in row {1}.'.format(len(line), len(bus_list) + 1)))
 				exit()
 
 			else:
@@ -232,7 +221,7 @@ def parse_bus_data(file_name):
 				vmin = float(line[9])
 
 				if vmax <= vmin:
-					print(error_message('Minimum voltage limit of bus \'{0}\' is greater or equal than its maximum voltage limit.'.format(line[0])))
+					print(logmgs.error_message('Minimum voltage limit of bus \'{0}\' is greater or equal than its maximum voltage limit.'.format(line[0])))
 					exit()
 
 				# CREATING BUS INSTANCE --------------------------------------------
@@ -242,13 +231,13 @@ def parse_bus_data(file_name):
 		for bus in bus_list:
 			if bus.bus_type == 'VT': break
 		else:
-			print('\n' + error_message('no VT bus was found. At least one must be present in the system.'))
+			print('\n' + logmgs.error_message('no VT bus was found. At least one must be present in the system.'))
 			exit()
 
 		# i is the bus number counter. It is used to assign the bus numbers that will be used by the program; bus numbers are assigned in the order they appear in the netfile.
 		for i in range(len(bus_list)): bus_list[i].number = i
 
-		print(Style.BRIGHT + Fore.GREEN + 'Done.' + Style.RESET_ALL)
+		print(logmgs.green_string(' Done.'))
 
 	counter = 0
 	for bus in bus_list:
@@ -260,7 +249,7 @@ def parse_bus_data(file_name):
 # PARSING BRANCH DATA ------------------------------------------------------------------------- {{{1
 def parse_branch_data(file_name, bus_list):
 	with open(file_name,'r') as file:
-		print(good_message('Loading branch data from file \'{0}\'... ').format(file.name), end = '')
+		print(logmgs.good_message('Loading branch data from file \'{0}\'... ').format(file.name), end = '')
 
 		# Serching for branch data finish data card
 		data_card_search('END OF BRANCH DATA', file)
@@ -275,7 +264,7 @@ def parse_branch_data(file_name, bus_list):
 			# Searching for hifen separator: if the line contains 10 hifens, consider bus data over
 			if 'END OF BRANCH DATA' in line[0] : break
 			if len(line) != 12:
-				print('\n' + error_message('branch data requires 12 parameters but {0} are given in row {1}.'.format(len(line), len(branch_list) + 1)))
+				print('\n' + logmgs.error_message('branch data requires 12 parameters but {0} are given in row {1}.'.format(len(line), len(branch_list) + 1)))
 				exit()
 
 			else:
@@ -284,7 +273,7 @@ def parse_branch_data(file_name, bus_list):
 				to_bus = line[1]
 				# Testing if from_bus and to_bus are the same
 				if from_bus == to_bus: 
-					print('\n' + error_message('there is a branch that has coinciding tap bus and load bus (\'{0}\')'.format(from_bus)))
+					print('\n' + logmgs.error_message('there is a branch that has coinciding tap bus and load bus (\'{0}\')'.format(from_bus)))
 					exit()
 				# Testing if to_bus and from_bus are defined in the bus list
 				from_bus_flag = False
@@ -294,10 +283,10 @@ def parse_branch_data(file_name, bus_list):
 					if bus.name == to_bus: to_bus_flag = True
 
 				if not from_bus_flag:
-					print('\n' + error_message('branch with tap bus \'{0}\' is invalid because such bus is not defined in the bus list.'.format(from_bus)))
+					print('\n' + logmgs.error_message('branch with tap bus \'{0}\' is invalid because such bus is not defined in the bus list.'.format(from_bus)))
 					exit()
 				if not to_bus_flag:
-					print('\n' + error_message('branch with load bus \'{0}\' is invalid because such bus is not defined in the bus list.'.format(to_bus)))
+					print('\n' + logmgs.error_message('branch with load bus \'{0}\' is invalid because such bus is not defined in the bus list.'.format(to_bus)))
 					exit()
 
 
@@ -339,7 +328,7 @@ def parse_branch_data(file_name, bus_list):
 					mintp = float(line[9])
 					maxtp = float(line[10])
 				if mintp >= maxtp:
-					print('\n' + error_message('branch from bus \'{0}\' to bus \'{1}\' cannot have a maximum transformer tap/phase less than or equal than the minimum.'.format(from_bus, to_bus)))
+					print('\n' + logmgs.error_message('branch from bus \'{0}\' to bus \'{1}\' cannot have a maximum transformer tap/phase less than or equal than the minimum.'.format(from_bus, to_bus)))
 					exit()
 
 				# CHECKING BRANCH STATUS -------------------------------------------
@@ -348,7 +337,7 @@ def parse_branch_data(file_name, bus_list):
 				new_branch = cL.branch( 0, from_bus, to_bus, r, x, gsh, bsh, a, phi, mintp, maxtp, status)
 				branch_list.append(new_branch)
 
-		print(Style.BRIGHT + Fore.GREEN + 'Done.' + Style.RESET_ALL)
+		print(logmgs.green_string(' Done.'))
 		counter = 0
 		for branch in branch_list:
 			branch.number = counter
@@ -357,13 +346,16 @@ def parse_branch_data(file_name, bus_list):
 		return branch_list
 
 # PARSING GENERATOR DATA ---------------------------------------------------------------------- {{{1
-def parse_generator_data(gendata_file, bus_list):
+def parse_generator_data(gendata_file, bus_list, system_data):
 	with open(gendata_file,'r') as file:
-		print(good_message('Loading generator data from file \'{0}\'... ').format(file.name), end = '')
+		print(logmgs.good_message('Loading generator data from file \'{0}\'... ').format(file.name), end = '')
 		# Serching for generator data finish data card
 		data_card_search('END OF GENERATOR DATA', file)
 		# Searching for generator data start data card
 		line = data_card_search('GENERATOR DATA FOLLOWS',file)
+
+		# Extracting system droop type from system data
+		droop_type = system_data[3]
 		gen_list = []
 		while True:
 			line = file.readline().strip().split('\t')
@@ -373,7 +365,7 @@ def parse_generator_data(gendata_file, bus_list):
 			if 'END OF GENERATOR DATA' in line[0] : break
 			# Checking if parameters are missing or surplus
 			if len(line) != 13:
-				print('\n' + error_message('generator data requires 13 parameters but {0} are given in row {1}.'.format(len(line), len(gen_list) + 1)))
+				print('\n' + logmgs.error_message('generator data requires 13 parameters but {0} are given in row {1}.'.format(len(line), len(gen_list) + 1)))
 				exit()
 			else:
 				# Checking if the generator is attached to a bus
@@ -381,40 +373,65 @@ def parse_generator_data(gendata_file, bus_list):
 					if str(line[0]) == bus.name:
 						break
 				else:	# If break was not done it was because the tap bus name declared does not exist
-					print('\n' + error_message('there is a generator attached to a non-declared bus \'{0}\'.'.format(line[0])))
+					print('\n' + logmgs.error_message('there is a generator attached to a non-declared bus \'{0}\'.'.format(line[0])))
 					exit()
 			
 				# Checking if the generator is not attached to a bus that already has a generator
 				for gen in gen_list:
 					if str(line[0]) == gen.bus_name:
-						print('\n' + error_message('there are two generators attached to bus \'{0}\''.format(line[0])))
+						print('\n' + logmgs.error_message('there are two generators attached to bus \'{0}\''.format(line[0])))
 						exit()
 
+				# Finally, go through customary checks
+				bus_name = line[0] 
+
 				# Checking pgen and qgen ------------------------------------------
-				if not (isfloat(line[1]) and float(line[1]) > 0): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float or negative generated active power.'.format(line[0]))
-				if not (isfloat(line[2])): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float generated reactive power.'.format(line[0]))
+				variable_check(line[1], allowed_type = 'float', allowed_range = '+0', variable_card = 'active power generation of generator at bus \'{0}\''.format(bus_name))
+				variable_check(line[2], allowed_type = 'float', variable_card = 'reactive power generation of generator at bus \'{0}\''.format(bus_name))
+				p_gen = float(line[1])
+				q_gen = float(line[2])
 
 				# Checking P and Q limits ------------------------------------------
-				if not isfloat(line[3]): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float maximum generated reactive power.'.format(line[0]))
-				if not isfloat(line[4]): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float minimum generated reactive power.'.format(line[0]))
-				if not (isfloat(line[5]) and float(line[5]) >= 0): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float or negative maximum generated active power.'.format(line[0]))
-				if not (isfloat(line[6]) and float(line[6]) >= 0): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float or negative minimum generated active power.'.format(line[0]))
+				variable_check(line[3], allowed_type = 'float', special_floats = ['inf'], variable_card = 'maximum reactive power generation of generator at bus \'{0}\''.format(bus_name))
+				variable_check(line[4], allowed_type = 'float', special_floats = ['-inf'], variable_card = 'minimum reactive power generation of generator at bus \'{0}\''.format(bus_name))
+				q_max = float(line[3])
+				q_min = float(line[4])
+
+				variable_check(line[5], allowed_type = 'float', allowed_range = '+0', special_floats = ['inf'], variable_card = 'maximum active power generation of generator at bus \'{0}\''.format(bus_name))
+				variable_check(line[6], allowed_type = 'float', allowed_range = '+0', variable_card = 'minimum active power generation of generator at bus \'{0}\''.format(bus_name))
+				p_max = float(line[3])
+				p_min = float(line[4])
+
 
 				# Checking rated values --------------------------------------------
-				if not (isfloat(line[7]) and float(line[7]) > 0): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float or non-positive voltage reference.'.format(line[0]))
-				if not (isfloat(line[8]) and float(line[8]) > 0): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float or non-positive rated active power.'.format(line[0]))
-				if not (isfloat(line[9]) and float(line[9]) > 0): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float or non-positive rated reactive power.'.format(line[0]))
-				if not (isfloat(line[10]) and float(line[10]) > 0): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float or non-positive rated voltage.'.format(line[0]))
+				variable_check(line[7], allowed_type = 'float', allowed_range = '++', variable_card = 'voltage reference of generator at bus \'{0}\''.format(bus_name))
+				variable_check(line[8], allowed_type = 'float', allowed_range = '++', variable_card = 'rated active power of generator at bus \'{0}\''.format(bus_name))
+				variable_check(line[9], allowed_type = 'float', allowed_range = '++', variable_card = 'rated reactive power of generator at bus \'{0}\''.format(bus_name))
+				variable_check(line[10], allowed_type = 'float', allowed_range = '++', variable_card = 'rated voltage of generator at bus \'{0}\''.format(bus_name))
+				v_ref = float(line[7])
+				p_rated = float(line[8])
+				q_rated = float(line[9])
+				v_rated = float(line[10])
 
 				# Checking Droop ramp values ---------------------------------------
-				if not ( (isfloat(line[11]) and float(line[11]) < 0) or np.isnan(float(line[11])) ): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float, non-negative or not \'NaN\' active Droop ramp.'.format(line[0]))
-				#if droopType != 'NONE' and cL.get_bus(line[0], bus_list).bus_type == 'dPQ' and np.isnan(isfloat(line[11])): raise DataCardError(' --> Generator in bus \'{0}\' has a \'NaN\' active Droop ramp yet the case Droop type is not \'NONE\'. Please enter a valid (negative) value or define the bus as PQ.'.format(line[0]))
+				variable_check(line[11], allowed_type = 'float', allowed_range = '--', special_floats = ['nan'], variable_card = 'active Droop ramp of generator at bus \'{0}\''.format(bus_name))
+				p_ramp = float(line[11])
+				variable_check(line[12], allowed_type = 'float', allowed_range = '--', special_floats = ['nan'], variable_card = 'reactive Droop ramp of generator at bus \'{0}\''.format(bus_name))
+				q_ramp = float(line[12])
 
-				if not ( (isfloat(line[12]) and float(line[12]) < 0) or np.isnan(float(line[12])) ): raise DataCardError(' --> Generator in bus \'{0}\' has a non-float, non-negative or not \'NaN\' reactive Droop ramp.'.format(line[0]))
-				#if droopType != 'NONE' and cL.get_bus(line[0], bus_list).bus_type in ['dPQ', 'PdQ'] and np.isnan(isfloat(line[12])): raise DataCardError(' --> Generator in bus \'{0}\' has a \'NaN\' active Droop ramp yet the case Droop type is not \'NONE\'. Please enter a valid (negative) value or define the bus as PQ.'.format(line[0]))				
+				if droop_type != 'NONE' and cL.get_bus(bus_name, bus_list).bus_type == 'dPQ' and np.isnan(p_ramp):
+					print('\n' + logmgs.error_message('generator in bus \'{0}\' has a \'NaN\' active Droop ramp yet the case Droop type is not \'NONE\' and the generator bus is defined as \'dPQ\' type. Either enter a valid (negative) value for the ramp or define the bus as PQ or PV.'.format(line[0])))
+					exit()
+
+				if droop_type != 'NONE' \
+				and ( cL.get_bus(bus_name, bus_list).bus_type == 'dPQ' or cL.get_bus(bus_name, bus_list).bus_type == 'PdQ' ) \
+				and np.isnan(p_ramp) :
+					print('\n' + logmgs.error_message('generator in bus \'{0}\' has a \'NaN\' reactive Droop ramp yet the case Droop type is not \'NONE\' and the generator bus is defined as \'{1}\' type. Either enter a valid (negative) value for the ramp or define the bus as PQ.'.format(bus_name, cL.get_bus(bus_name, bus_list).bus_type )))
+					exit()
+				
 
 				# Creating the new generator instance to be added
-				new_gen = cL.generator(line[0], line[1], line[2], line[3], line[4], line[5], line[6], line[7], line[8], line[9], line[10], line[11], line[12])
+				new_gen = cL.generator(bus_name, p_gen, q_gen, q_max, q_min ,p_max, p_min, v_ref, p_rated, q_rated, v_rated, p_ramp, q_ramp)
 				# If the parameters of the generator were given in relation with the generator PU system, they should be converted to the system's PU			
 				gen_list.append(new_gen)
 
@@ -426,7 +443,7 @@ def parse_generator_data(gendata_file, bus_list):
 				if not cL.is_gen(bus.name, gen_list): raise DataCardError(' --> Bus \'{0}\' is defined as {1} but does not have a generator attached.'.format(bus.name, bus.bus_type))				
 
 				
-		print(Style.BRIGHT + Fore.GREEN + 'Done.' + Style.RESET_ALL)
+		print(logmgs.green_string(' Done.'))
 		return gen_list
 
 # PARSING MACHINE DATA ------------------------------------------------------------------------ {{{1
@@ -455,15 +472,16 @@ def load_case(net_file,**kwargs):
 	if 'faultdata_file' in kwargs: faultdata_file = kwargs.get('faultdata_file')
 	else: faultdata_file = net_file
 
-	print(Style.BRIGHT + 50*'-' + '\n >> LOADING NET FILE \'{0}\': \n'.format(net_file) + 50*'-' + Style.RESET_ALL)
+	print(logmgs.header_message('LOADING NET FILE \'{0}\''.format(net_file)))
 	system_data = parse_system_data(systemdata_file)
 	bus_list = parse_bus_data(busdata_file)
 	branch_list = parse_branch_data(branchdata_file, bus_list)
-	gen_list = parse_generator_data(gendata_file, bus_list)
+	gen_list = parse_generator_data(gendata_file, bus_list, system_data)
 	machine_list = parse_machine_data(machinedata_file, gen_list)
 	fault_list = parse_fault_data(faultdata_file, branch_list, bus_list)
 	
 	case = cL.case(system_data, bus_list, branch_list, gen_list, machine_list, fault_list)
+	print(logmgs.green_string(' -> Case\'{0}\' from file \'{1}\' loaded successfully. No errors reported. \n'.format(system_data[0], net_file)))
 	#case.update_matrixes()
 
 	return case

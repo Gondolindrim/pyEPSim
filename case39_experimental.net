@@ -90,7 +90,7 @@ ZBUS	TAPBUS	Type	 R	X	Gsh	Bsh	Ratio	PHASE	MINTP	MAXTP	STATUS
 --------------------------------------------------
 BRANCH DATA FOLLOWS                              
 Bus 02	Bus 01	F	0.0035	0.0411	0	0.6987	1	0	NaN	NaN	1
-Bus 39	Bus 01	F	0.001 	0.025	0	0.75  	1	15	NaN	NaN	1
+Bus 39	Bus 01	F	0.001 	0.025	0	0.75  	1	0	NaN	NaN	1
 Bus 03	Bus 02	F	0.0013	0.0151	0	0.2572	1	0	NaN	NaN	1
 Bus 25	Bus 02	F	0.007	0.0086	0	0.146 	1	0	NaN	NaN	1	
 Bus 30	Bus 02	F	0	0.0181	0	0     	1	0	NaN	NaN	1

@@ -199,6 +199,7 @@ GENERATOR DATA COLUMNS
 	- Name of the bus the generator is attached to. Must match one of the bus names in the first field of the bus properties.
 02 Generated active power (MW)(+0)(F)
 	- Active power injected into the bus the generator is attached to. Use zero for synchronous condensers.
+	- This value needs to be equal to or greater than zero, as negative pwoer generation would mean generator working as an active load (motor).
 03 Generated reactive power (MVAr)(F)
 	- Reactive power injected into the bus the generator is attached to.
 04 Maximum generated reactive power (MVAr)(F)
@@ -208,7 +209,8 @@ GENERATOR DATA COLUMNS
 05 Minimum generated reactive power (MVAr)(F)
 	- The minimum reactive power the generator needs to output to operate properly.
 	- If this value is extrapolated during power flow simulation, the algorithm will fix reactive power injection to this minimum value and re-run the process.
-	- This value is used in dynamic simulations as the minimum value for QV curves in QV Droop controllers. Use '-inf' for -infinite; internally the algorithm will set it to -10.
+	- This value is used in dynamic simulations as the minimum value for QV curves in QV Droop controllers. Use '-inf' for -infinite.
+	- This value needs to be equal to or greater than zero, as negative pwoer injection would mean generator working as an active load (motor).
 06 Maximum generated active power (MW)(+0)(F)
 	- The maximum active power the generator can safely output.
 	- If this value is extrapolated during power flow simulation, the algorithm will fix bus active power injection as this maximum value, and re-run the process.
@@ -235,6 +237,7 @@ GENERATOR DATA COLUMNS
 	- Obligatory for buses participating in linear active power Droop
 	- Used in linear active Droop power flow and dynamic simulations. Ignored in other cases.
 	- In case it is not available, use 'NaN'; the checking program will throw an error if the bus is a Droop type but the ramp is defined as such.
+	- If the system Droop type is defined as 'NONE' the generator and its bus will be treated as a PQ type.
 13 Reactive Droop ramp (MVAr/kV)(--)(F)
 	- Obligatory for buses participating in linear reactive power Droop
 	- Used in linear reactive Droop power flow and dynamic simulations. Ignored in other cases.

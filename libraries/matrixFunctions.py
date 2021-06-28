@@ -34,13 +34,24 @@ def LambdaP(V,a,b,d): return V*( a*cos(d) + b*sin(d) )
 
 # Functions used for state estimation and power flow {{{1
 def dPdT(V,theta,case): #{{{2
-	H = np.zeros((int(case.isP.sum()), int(case.isT.sum())))	# Note that H has the size nxm, where n is the amount of active power variables to be estimated and m is the amount of angle variables to be estimated. Also note that this sum takes account not only of the bus power injections but also the transmission line power fluxes. This is where the isP.sum() and isT.sum() come from: since the elements of these matrixes are either zero or one, the sum of their elements give precisely the sizes of matrix H. This pattern also repeats itself to the other matrixes that make the jacobian, so this "trick" is employed in all of them.
+	nbus = case.get_nbus()
+	
+	# Obtaining number of rows and columns for pre-allocation: dPdT should have as many rows as there are buses/lines which P are not variables (isP[i,j] == 0). It should also have as many columns as there are buses with variable angle (isT =  1). In other words, dPdT has the size n by m, where n is the amount of active power variables to be estimated and m is the amount of angle variables to be estimated. This is a pattern that happens over the other dXdX matrices, so the same idea is employed.
+
+	row_number = 0
+	col_number = 0
+	for i in range(nbus):
+		if case.isT[i]:col_number +=  1
+		for j in range(nbus):
+			if not case.isP[i,j]: row_number += 1
+
+	H = np.zeros((row_number, col_number))
 	i = 0	# Starting counter
-	for j in range(case.nBus):
-		for n in range(case.nBus):
-			if case.isP[j,n]:
+	for j in range(nbus):
+		for n in range(nbus):
+			if not case.isP[j,n]:
 				p = 0
-				for k in range(case.nBus):
+				for k in range(nbus):
 					if case.isT[k]:
 						if j==n: # If measuring power injection
 							if k==j: # Calculating dPj/dTj. Note that since Pj = -sum(Pkj) for all k connected to j, from whence comes the possibility og using the same dPj_dTk function with the summation.
@@ -61,13 +72,21 @@ def dPdT(V,theta,case): #{{{2
 	return H
 
 def dPdV(V,theta,case):#{{{2
-	N = H = np.zeros((int(case.isP.sum()), int(case.isV.sum())))
+	nbus = case.get_nbus()
+	row_number = 0
+	col_number = 0
+	for i in range(nbus):
+		if case.isV[i]:col_number +=  1
+		for j in range(nbus):
+			if not case.isP[i,j]: row_number += 1
+
+	N = np.zeros((row_number, col_number))
 	i = 0
-	for j in range(case.nBus):	
-		for n in range(case.nBus):
-			if case.isP[j,n]:
+	for j in range(nbus):	
+		for n in range(nbus):
+			if not case.isP[j,n]:
 				p = 0
-				for k in range(case.nBus):
+				for k in range(nbus):
 					if case.isV[k]:
 						if j==n: # Calculating dPj/dTk
 							if k==j: N[i,p] = 2*V[j]*case.G[j,j] + sum([LambdaP(V[m],case.G[j,m],case.B[k,m],theta[j] - theta[m]) for m in case.K[j]])
@@ -85,13 +104,21 @@ def dPdV(V,theta,case):#{{{2
 	return N
 
 def dQdT(V,theta,case): #{{{2
-	M = np.zeros((int(case.isQ.sum()), int(case.isT.sum())))
+	nbus = case.get_nbus()
+	row_number = 0
+	col_number = 0
+	for i in range(nbus):
+		if case.isT[i]:col_number +=  1
+		for j in range(nbus):
+			if not case.isQ[i,j]: row_number += 1
+
+	M = np.zeros((row_number, col_number))
 	i = 0
-	for j in range(case.nBus):
-		for n in range(case.nBus):
-			if case.isQ[j,n]:
+	for j in range(nbus):
+		for n in range(nbus):
+			if not case.isQ[j,n]:
 				p = 0
-				for k in range(case.nBus):
+				for k in range(nbus):
 					if case.isT[k]:
 						if j==n:
 							if j==k: M[i,p] = V[j]*sum([LambdaP(V[m],case.G[j,m],case.B[j,m],theta[j] - theta[m]) for m in case.K[j]])
@@ -106,13 +133,22 @@ def dQdT(V,theta,case): #{{{2
 	return M
 
 def dQdV(V,theta,case): #{{{2
-	L = np.zeros((int(case.isQ.sum()), int(case.isV.sum())))
+	nbus = case.get_nbus()
+
+	row_number = 0
+	col_number = 0
+	for i in range(nbus):
+		if case.isV[i]:col_number +=  1
+		for j in range(nbus):
+			if not case.isQ[i,j]: row_number += 1
+
+	L = np.zeros((row_number, col_number))
 	i = 0
-	for j in range(case.nBus):	
-		for n in range(case.nBus):
-			if case.isQ[j,n]:
+	for j in range(nbus):	
+		for n in range(nbus):
+			if not case.isQ[j,n]:
 				p = 0
-				for k in range(case.nBus):
+				for k in range(nbus):
 					if case.isV[k]:
 						if j==n:
 							if j==k: L[i,p] = -2*V[j]*case.B[j,j] + sum([LambdaP(V[m],case.G[j,m],case.B[j,m],theta[j] - theta[m]) for m in case.K[j]])
@@ -128,41 +164,56 @@ def dQdV(V,theta,case): #{{{2
 	return L
 
 def h(V,theta,case): #{{{2
-	h = np.zeros((int(case.isP.sum()) + int(case.isQ.sum()),1))
+	nbus = case.get_nbus()
+
+	row_number = 0
+	for i in range(nbus):
+		for j in range(nbus):
+			if not case.isP[i,j]: row_number += 1
+			if not case.isQ[i,j]: row_number += 1
+
+	h = np.zeros((row_number,1))
 	i = 0
-	for j in range(case.nBus):	
-		for n in range(case.nBus):
-			if case.isP[j,n]:
+	for j in range(nbus):	
+		for n in range(nbus):
+			if not case.isP[j,n]:
 				#print(' >>>>>>>>>> h({}) = P({},{})'.format(i,j,n))
 				if j==n: # If measuring power injection on bar j
 					h[i] = V[j]**2*case.G[j,j] + V[j]*sum([LambdaP(V[m],case.G[j,m],case.B[j,m],theta[j] - theta[m]) for m in case.K[j]])
 				else:	# If measuring power flux from bar j to n
 					h[i] = V[j]**2*case.Gsh[j,n] + V[j]*LambdaP(V[n],case.G[j,n],case.B[j,n],theta[j] - theta[n])
 				i +=1
-	for j in range(case.nBus):	
-		for n in range(case.nBus):
-			if case.isQ[j,n]:
+	for j in range(nbus):	
+		for n in range(nbus):
+			if not case.isQ[j,n]:
 				#print(' >>>>>>>>>> h({}) = Q({},{})'.format(i,j,n))
 				if j==n:
 					h[i] = -V[j]**2*case.B[j,j] + V[j]*sum([ LambdaP(V[m],-case.B[j,m],case.G[j,m],theta[j] - theta[m]) for m in case.K[j]])
 				else:
-					h[i] = -V[j]**2*case.Bsh[j,n] + V[j]*LambdaP(V[m],-case.B[j,m],case.G[j,m],theta[j] - theta[m])
+					h[i] = -V[j]**2*case.Bsh[j,n] + V[j]*LambdaP(V[n],-case.B[j,n],case.G[j,n],theta[j] - theta[n])
 				i +=1
 	return h
 
 def Z(P,Q,case): #{{{2
-	i=0
-	Z = np.empty((int(case.isP.sum()) + int(case.isQ.sum()),1))
-	for j in range(case.nBus):	
-		for n in range(case.nBus):
-			if case.isP[j,n]:
+	nbus = case.get_nbus()
+	row_number = 0
+	for i in range(nbus):
+		for j in range(nbus):
+			if not case.isP[i,j]: row_number += 1
+			if not case.isQ[i,j]: row_number += 1
+
+	Z = np.empty((row_number,1))
+	i = 0
+	for j in range(nbus):	
+		for n in range(nbus):
+			if not case.isP[j,n]:
 				Z[i] = P[j,n]
 				#print(' >>>>>>>>>> Z({}) = P({},{}) = {}'.format(i,j,n,Z[i]))
 				i+=1
 
-	for j in range(case.nBus):	
-		for n in range(case.nBus):
-			if case.isQ[j,n]:
+	for j in range(nbus):	
+		for n in range(nbus):
+			if not case.isQ[j,n]:
 				Z[i] = Q[j,n]
 				#print(' >>>>>>>>>> Z({}) = Q({},{}) = {}'.format(i,j,n,Z[i]))
 				i += 1

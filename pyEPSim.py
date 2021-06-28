@@ -44,14 +44,14 @@ from copy import deepcopy as copy
 # -------------------------------------------------
 # (2) DESCRIBRING SYSTEM: READING FILE AND LOADING CASE {{{1
 # ----------------------------------------------------------
-
+np.set_printoptions(threshold=np.inf)
 args = pA.parseArguments()
 verbose = args.verbose
 net_file = args.net
 
 case = lC.load_case(net_file)
-case.runPowerFlow()
-case.printBusData()
+success = case.run_power_flow()
+if success: print(case)
 #print(case)
 #Yred, rCase = case.reduceMatrixes()
 #

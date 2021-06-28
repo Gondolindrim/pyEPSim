@@ -28,8 +28,8 @@ from libraries.tabulate.tabulate import tabulate
 from copy import deepcopy
 copy = deepcopy
 
-def powerFlow(case,**kwargs): #{{{1
-
+def power_flow(case,**kwargs): #{{{1
+	print(case.isP)
 	# absTol is the absolute tolerance used by the method
 	if ('absTol' in kwargs): absTol = kwargs['absTol']
 	else: absTol = 1e-6
@@ -50,20 +50,31 @@ def powerFlow(case,**kwargs): #{{{1
 	else: verbose = 0
 
 	# Initial guess: flat start
-	V = np.ones(case.nBus)	
-	theta = np.zeros(case.nBus)
-	for n in range(case.nBus): 
-		if case.busData[n].PVtype == 'VT' or case.busData[n].PVtype == 'PV': V[n] = case.busData[n].finalVoltage
-		if case.busData[n].PVtype == 'VT': theta[n] = case.busData[n].finalAngle
+	nbus = case.get_nbus()
+	V = np.ones(nbus)	
+	theta = np.zeros(nbus)
+	for n in range(nbus): 
+		if case.bus_data[n].bus_type in ['VT', 'PV']: V[n] = case.bus_data[n].final_voltage
+		if case.bus_data[n].bus_type == 'VT': theta[n] = case.bus_data[n].final_angle
+	
+	# P and Q are the vectors of injected bus power. They are calculated as the difference between the injected power on the bus and the load. This difference does not account for 
+	#	shunt impedance loads, only for power (MW and MVAr) loads. The impendance loads are dealth with through the impedance matrices.
+	P = np.zeros((nbus, nbus))
+	Q = np.zeros((nbus, nbus))
+	for i in range(nbus):
+		bus = case.bus_data[i]
+		gen = cL.is_gen(bus.name, case.gen_data)
+		if gen:
+			P[i,i] = gen.p_gen
+			Q[i,i] = gen.q_gen
 
+		P[i,i] = P[i,i] - bus.p_load
+		Q[i,i] = Q[i,i] - bus.q_load
 
-	# P and Q are the vectors of injected bus power
-	P = np.diag(array([bus.pGen - bus.pLoad for bus in case.busData]))/case.Sb
-	Q = np.diag(array([bus.qGen - bus.qLoad for bus in case.busData]))/case.Sb
+	P, Q = P/case.Sb, Q/case.Sb
 
 	success = False
-
-	itCount = 0
+	iteration_count = 0
 	verbose = 0
 
 	# -------------------------------------------------
@@ -72,10 +83,10 @@ def powerFlow(case,**kwargs): #{{{1
 	if verbose > 0: print(' --> Beggining power flow method on case \'{0}\'...'.format(case.name))
 	while(True):	# STARTING ITERATIONS
 		# Increasing iteration counter
-		itCount += 1
+		iteration_count += 1
 		
 		# Printing iteration report
-		if verbose > 1: print('\n ==> Iteration #{0:3.0f} '.format(itCount) + '-'*50)
+		if verbose > 1: print('\n ==> Iteration #{0:3.0f} '.format(iteration_count) + '-'*50)
 		
 		# Calculating mF.Jacobian
 		H = mF.Jac(V,theta,case)	
@@ -89,15 +100,15 @@ def powerFlow(case,**kwargs): #{{{1
 		
 		# Updating V and theta
 		i = 0
-		for j in range(case.nBus):
+		for j in range(nbus):
 			if case.isT[j]:
 				theta[j] += dX[i]
 				i+=1
-		for j in range(case.nBus):
+		for j in range(nbus):
 			if case.isV[j]:
 				V[j] += dX[i]
 				i+=1
-
+			
 		# Printing iteration results
 		if verbose > 1: print(' --> |dX| = {0}\n --> dV = {1}\n --> dTheta = {2}'.format(norm(dX),transpose(dX[case.nBus-1: ,0]),dX[0: case.nBus-1,0]))
 
@@ -107,7 +118,7 @@ def powerFlow(case,**kwargs): #{{{1
 			break	
 
 		if norm(dX) > deltaMax: break
-		if itCount > maxIter - 1: break
+		if iteration_count > maxIter - 1: break
 
 		# Pausing for each iteration
 		if verbose > 1: input('\n --> Power flow method paused for next iteration. Press <ENTER> to continue.')
@@ -115,21 +126,20 @@ def powerFlow(case,**kwargs): #{{{1
 	# Printing results
 	if verbose > 0:
 
-		tabHeaders = ['Bus name','Number','Voltage (p.u.)','Angle (rad)']
+		tab_headers = ['Bus name','Number','Voltage (p.u.)','Angle (rad)']
 
-		tabRows = []
-		for bus in case.busData:
-			tabRows.append([bus.name, bus.number, V[bus.number], theta[bus.number]])
+		tab_rows = []
+		for bus in case.bus_data:
+			tab_rows.append([bus.name, bus.number, V[bus.number], theta[bus.number]])
 			
-		resultsTable = tabulate(tabRows,headers=tabHeaders,tablefmt='psql')
+		results_table = tabulate(tab_rows, headers = tab_headers, tablefmt='psql')
 
 		# Printing convergence results
 		if success:
-			print('\n >> Power flow method successful with {0} total iterations and step increment norm |dX| = {1}. Results:'.format(itCount,norm(dX)))
-			print(resultsTable)
+			print('\n >> Power flow method successful with {0} total iterations and step increment norm |dX| = {1}. Results:'.format(iteration_count,norm(dX)))
+			print(results_table)
 		#	if verbose > 1: print('\n --> Residual = \n{1}\n\n --> Elapsed time: {0} s'.format(elapsed,r))
 
-		else: print(' --> Power flow method not successful at iteration {0} with step increment |dX| = {1}.'.format(itCount,norm(dX)))
+		else: print(' --> Power flow method not successful at iteration {0} with step increment |dX| = {1}.'.format(iteration_count,norm(dX)))
 
-	return [V, theta, norm(dX), itCount, success]
-
+	return [V, theta, norm(dX), iteration_count, success]
